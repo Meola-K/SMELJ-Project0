@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZeitStempel - Admin</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-brand">ZeitStempel</div>
+        <div class="navbar-user">
+            <span id="nav-username"></span>
+            <button id="btn-logout" class="btn btn-sm">Abmelden</button>
+        </div>
+    </nav>
+    <div id="page-login" class="page">
+        <div class="login-card">
+            <h2>Anmelden</h2>
+            <div id="login-error" class="alert alert-error hidden"></div>
+            <div class="form-group">
+                <label for="login-email">E-Mail</label>
+                <input type="email" id="login-email" placeholder="admin@zeitstempel.de">
+            </div>
+            <div class="form-group">
+                <label for="login-password">Passwort</label>
+                <input type="password" id="login-password" placeholder="Passwort">
+            </div>
+            <button id="btn-login" class="btn btn-primary btn-block">Anmelden</button>
+        </div>
+    </div>
+    <div id="page-admin" class="page hidden">
+        <div class="container">
+            <div class="page-header">
+                <h1>Benutzerverwaltung</h1>
+                <button id="btn-open-create-user" class="btn btn-primary">+ Nutzer Anlegen</button>
+            </div>
+
+            <div id="users-table-wrap">
+                <table class="table" id="users-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>E-Mail</th>
+                            <th>Rolle</th>
+                            <th>Gruppe</th>
+                            <th>Vorgesetzter</th>
+                            <th>Status</th>
+                            <th>Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div id="modal-create-user" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Neuen Benutzer anlegen</h2>
+                <button class="modal-close" id="btn-close-modal">&times;</button>
+            </div>
+            <div id="create-user-error" class="alert alert-error hidden"></div>
+            <div id="create-user-success" class="alert alert-success hidden"></div>
+            <form id="form-create-user">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="cu-firstname">Vorname *</label>
+                        <input type="text" id="cu-firstname" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="cu-lastname">Nachname *</label>
+                        <input type="text" id="cu-lastname" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="cu-email">E-Mail *</label>
+                    <input type="email" id="cu-email" required>
+                    <span id="cu-email-hint" class="form-hint"></span>
+                </div>
+                <div class="form-group">
+                    <label for="cu-password">Passwort *</label>
+                    <input type="password" id="cu-password" required minlength="6">
+                    <span class="form-hint">Mindestens 6 Zeichen</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="cu-role">Rolle *</label>
+                    <select id="cu-role" required>
+                        <option value="arbeiter">Mitarbeiter</option>
+                        <option value="vorgesetzter">Vorgesetzter</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="cu-group">Gruppe</label>
+                    <select id="cu-group">
+                        <option value="">-- Keine Gruppe --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="cu-supervisor">Vorgesetzter</label>
+                    <select id="cu-supervisor">
+                        <option value="">-- Kein Vorgesetzter --</option>
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn" id="btn-cancel-modal">Abbrechen</button>
+                    <button type="submit" class="btn btn-primary" id="btn-submit-user">Benutzer erstellen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="modal-edit-user" class="modal hidden">
+        <div class="modal-backdrop modal-backdrop-edit"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Benutzer bearbeiten</h2>
+                <button class="modal-close" id="btn-close-edit-modal">&times;</button>
+            </div>
+            <div id="edit-user-error" class="alert alert-error hidden"></div>
+            <div id="edit-user-success" class="alert alert-success hidden"></div>
+            <form id="form-edit-user">
+                <input type="hidden" id="eu-id">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="eu-firstname">Vorname *</label>
+                        <input type="text" id="eu-firstname" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="eu-lastname">Nachname *</label>
+                        <input type="text" id="eu-lastname" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="eu-email">E-Mail *</label>
+                    <input type="email" id="eu-email" required>
+                    <span id="eu-email-hint" class="form-hint"></span>
+                </div>
+                <div class="form-group">
+                    <label for="eu-password">Neues Passwort</label>
+                    <input type="password" id="eu-password" minlength="6" placeholder="Leer lassen um nicht zu ändern">
+                    <span class="form-hint">Nur ausfüllen, wenn das Passwort geändert werden soll</span>
+                </div>
+                <div class="form-group">
+                    <label for="eu-role">Rolle *</label>
+                    <select id="eu-role" required>
+                        <option value="arbeiter">Mitarbeiter</option>
+                        <option value="vorgesetzter">Vorgesetzter</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="eu-group">Gruppe</label>
+                    <select id="eu-group">
+                        <option value="">-- Keine Gruppe --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="eu-supervisor">Vorgesetzter</label>
+                    <select id="eu-supervisor">
+                        <option value="">-- Kein Vorgesetzter --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="eu-active">Status</label>
+                    <select id="eu-active">
+                        <option value="1">Aktiv</option>
+                        <option value="0">Inaktiv</option>
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn" id="btn-cancel-edit-modal">Abbrechen</button>
+                    <button type="submit" class="btn btn-primary" id="btn-submit-edit">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/js/app.js" type="module"></script>
+</body>
+</html>
