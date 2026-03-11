@@ -1,6 +1,7 @@
 import { apiFetch, setToken, clearToken, getToken } from './api.js';
 
 const pageLogin = document.getElementById('page-login');
+const pageDashboard = document.getElementById('page-dashboard');
 const pageAdmin = document.getElementById('page-admin');
 const loginEmail = document.getElementById('login-email');
 const loginPassword = document.getElementById('login-password');
@@ -8,6 +9,8 @@ const loginError = document.getElementById('login-error');
 const btnLogin = document.getElementById('btn-login');
 const btnLogout = document.getElementById('btn-logout');
 const navUsername = document.getElementById('nav-username');
+const navLinks = document.getElementById('nav-links');
+const navAdminLink = document.getElementById('nav-admin-link');
 
 const modal = document.getElementById('modal-create-user');
 const btnOpenModal = document.getElementById('btn-open-create-user');
@@ -27,9 +30,42 @@ const cuGroup = document.getElementById('cu-group');
 const cuSupervisor = document.getElementById('cu-supervisor');
 const cuEmailHint = document.getElementById('cu-email-hint');
 
+const btnStamp = document.getElementById('btn-stamp');
+const stampIndicator = document.getElementById('stamp-indicator');
+const stampStatusText = document.getElementById('stamp-status-text');
+const todayMinutesEl = document.getElementById('today-minutes');
+const monthBalanceEl = document.getElementById('month-balance');
+const todayStampsList = document.getElementById('today-stamps-list');
+const historyTbody = document.getElementById('history-tbody');
+const historyFrom = document.getElementById('history-from');
+const historyTo = document.getElementById('history-to');
+const btnLoadHistory = document.getElementById('btn-load-history');
+
 let currentUser = null;
 let allUsers = [];
 let allGroups = [];
+let isStampedIn = false;
+let todayTimer = null;
+
+const pages = { dashboard: pageDashboard, admin: pageAdmin };
+
+function navigateTo(page) {
+    Object.values(pages).forEach(p => p.classList.add('hidden'));
+    if (pages[page]) pages[page].classList.remove('hidden');
+    document.querySelectorAll('.nav-link').forEach(l => {
+        l.classList.toggle('active', l.dataset.page === page);
+    });
+
+    if (page === 'dashboard') loadDashboard();
+    if (page === 'admin') { loadUsers(); loadGroups(); }
+}
+
+document.querySelectorAll('.nav-link').forEach(link => {
+    link.addEventListener('click', (e) => {
+        e.preventDefault();
+        navigateTo(link.dataset.page);
+    });
+});
 
 btnLogin.addEventListener('click', async () => {
     loginError.classList.add('hidden');
@@ -43,7 +79,7 @@ btnLogin.addEventListener('click', async () => {
         });
         setToken(data.token);
         currentUser = data.user;
-        showAdmin();
+        showApp();
     } catch (err) {
         loginError.textContent = err.message;
         loginError.classList.remove('hidden');
@@ -57,8 +93,10 @@ loginPassword.addEventListener('keydown', (e) => {
 btnLogout.addEventListener('click', () => {
     clearToken();
     currentUser = null;
-    pageAdmin.classList.add('hidden');
+    clearInterval(todayTimer);
+    Object.values(pages).forEach(p => p.classList.add('hidden'));
     pageLogin.classList.remove('hidden');
+    navLinks.classList.add('hidden');
     document.querySelector('.navbar-user').classList.add('hidden');
 });
 
@@ -68,19 +106,197 @@ btnLogout.addEventListener('click', () => {
     try {
         const data = await apiFetch('/auth/me');
         currentUser = data;
-        showAdmin();
+        showApp();
     } catch {
         clearToken();
     }
 })();
 
-function showAdmin() {
+function showApp() {
     pageLogin.classList.add('hidden');
-    pageAdmin.classList.remove('hidden');
-    navUsername.textContent = `${currentUser.first_name} ${currentUser.last_name}`;
+    const name = currentUser.first_name || currentUser.firstName;
+    const last = currentUser.last_name || currentUser.lastName;
+    navUsername.textContent = `${name} ${last}`;
+    navLinks.classList.remove('hidden');
     document.querySelector('.navbar-user').classList.remove('hidden');
-    loadUsers();
-    loadGroups();
+
+    const role = currentUser.role;
+    if (role === 'admin' || role === 'vorgesetzter') {
+        navAdminLink.classList.remove('hidden');
+    } else {
+        navAdminLink.classList.add('hidden');
+    }
+
+    navigateTo('dashboard');
+}
+
+function formatMinutes(mins) {
+    const sign = mins < 0 ? '-' : '';
+    const abs = Math.abs(Math.floor(mins));
+    const h = Math.floor(abs / 60);
+    const m = abs % 60;
+    return `${sign}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function formatTime(dateStr) {
+    const d = new Date(dateStr);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function formatDate(dateStr) {
+    const d = new Date(dateStr);
+    return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+}
+
+async function loadDashboard() {
+    try {
+        const data = await apiFetch('/stamp/today');
+        isStampedIn = data.isStampedIn;
+        updateStampUI(data.todayMinutes, data.balance);
+        renderTodayStamps(data.stamps);
+
+        const now = new Date();
+        const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        historyFrom.value = firstOfMonth.toISOString().split('T')[0];
+        historyTo.value = now.toISOString().split('T')[0];
+        loadHistory();
+
+        clearInterval(todayTimer);
+        if (isStampedIn) {
+            todayTimer = setInterval(async () => {
+                try {
+                    const fresh = await apiFetch('/stamp/today');
+                    updateStampUI(fresh.todayMinutes, fresh.balance);
+                } catch {}
+            }, 30000);
+        }
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+function updateStampUI(todayMins, balance) {
+    stampIndicator.className = `stamp-indicator ${isStampedIn ? 'in' : 'out'}`;
+    stampStatusText.textContent = isStampedIn ? 'Eingestempelt' : 'Ausgestempelt';
+    btnStamp.disabled = false;
+    btnStamp.textContent = isStampedIn ? 'Ausstempeln' : 'Einstempeln';
+    btnStamp.className = `btn btn-stamp ${isStampedIn ? 'stamp-out' : 'stamp-in'}`;
+    todayMinutesEl.textContent = formatMinutes(todayMins);
+    monthBalanceEl.textContent = formatMinutes(balance);
+    monthBalanceEl.className = `stamp-info-value ${balance >= 0 ? 'positive' : 'negative'}`;
+}
+
+function renderTodayStamps(stamps) {
+    if (!stamps || stamps.length === 0) {
+        todayStampsList.innerHTML = '<p class="text-muted">Heute noch keine Stempelzeiten.</p>';
+        return;
+    }
+    todayStampsList.innerHTML = stamps.map(s => `
+        <div class="stamp-entry">
+            <div class="stamp-entry-icon ${s.type}"></div>
+            <span class="stamp-entry-time">${formatTime(s.stamp_time)}</span>
+            <span class="stamp-entry-label">${s.type === 'in' ? 'Einstempeln' : 'Ausstempeln'}</span>
+        </div>
+    `).join('');
+}
+
+btnStamp.addEventListener('click', async () => {
+    btnStamp.disabled = true;
+    try {
+        const result = await apiFetch('/stamp', {
+            method: 'POST',
+            body: JSON.stringify({ source: 'web' }),
+        });
+
+        if (!result.success) {
+            alert(result.warning || 'Stempeln fehlgeschlagen');
+            btnStamp.disabled = false;
+            return;
+        }
+
+        if (result.warning) {
+            alert(result.warning);
+        }
+
+        isStampedIn = result.type === 'in';
+        updateStampUI(result.todayMinutes, result.balance);
+
+        const fresh = await apiFetch('/stamp/today');
+        renderTodayStamps(fresh.stamps);
+
+        clearInterval(todayTimer);
+        if (isStampedIn) {
+            todayTimer = setInterval(async () => {
+                try {
+                    const f = await apiFetch('/stamp/today');
+                    updateStampUI(f.todayMinutes, f.balance);
+                } catch {}
+            }, 30000);
+        }
+    } catch (err) {
+        alert('Fehler: ' + err.message);
+        btnStamp.disabled = false;
+    }
+});
+
+async function loadHistory() {
+    const from = historyFrom.value;
+    const to = historyTo.value;
+    if (!from || !to) return;
+
+    try {
+        const stamps = await apiFetch(`/stamp/history?from=${from}&to=${to}`);
+        renderHistory(stamps);
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+btnLoadHistory.addEventListener('click', loadHistory);
+
+function renderHistory(stamps) {
+    const days = {};
+    stamps.forEach(s => {
+        const day = new Date(s.stamp_time).toISOString().split('T')[0];
+        if (!days[day]) days[day] = [];
+        days[day].push(s);
+    });
+
+    const rows = [];
+    const sortedDays = Object.keys(days).sort().reverse();
+
+    sortedDays.forEach(day => {
+        const entries = days[day];
+        for (let i = 0; i < entries.length; i += 2) {
+            const stampIn = entries[i]?.type === 'in' ? entries[i] : null;
+            const stampOut = entries[i + 1]?.type === 'out' ? entries[i + 1] : null;
+            let duration = '–';
+
+            if (stampIn && stampOut) {
+                const diff = (new Date(stampOut.stamp_time) - new Date(stampIn.stamp_time)) / 60000;
+                duration = formatMinutes(diff);
+            }
+
+            rows.push(`
+                <tr>
+                    <td>${formatDate(day)}</td>
+                    <td>${stampIn ? formatTime(stampIn.stamp_time) : '–'}</td>
+                    <td>${stampOut ? formatTime(stampOut.stamp_time) : '–'}</td>
+                    <td>${duration}</td>
+                </tr>
+            `);
+        }
+
+        if (entries.length === 0) {
+            rows.push(`<tr><td>${formatDate(day)}</td><td>–</td><td>–</td><td>–</td></tr>`);
+        }
+    });
+
+    if (rows.length === 0) {
+        historyTbody.innerHTML = '<tr><td colspan="4" class="text-muted">Keine Stempelzeiten im gewählten Zeitraum.</td></tr>';
+    } else {
+        historyTbody.innerHTML = rows.join('');
+    }
 }
 
 async function loadUsers() {
@@ -94,6 +310,7 @@ async function loadUsers() {
 
 function renderUsersTable() {
     const roleLabels = { admin: 'Admin', vorgesetzter: 'Vorgesetzter', arbeiter: 'Mitarbeiter' };
+    const uid = currentUser.id || currentUser.id;
     usersTbody.innerHTML = allUsers
         .map(
             (u) => `
@@ -106,7 +323,7 @@ function renderUsersTable() {
             <td><span class="badge ${u.active ? 'badge-active' : 'badge-inactive'}">${u.active ? 'Aktiv' : 'Inaktiv'}</span></td>
             <td class="actions-cell">
                 <button class="btn btn-sm" onclick="window._editUser(${u.id})">Bearbeiten</button>
-                ${u.id !== currentUser.id ? (u.active
+                ${u.id !== uid ? (u.active
                     ? `<button class="btn btn-sm btn-danger" onclick="window._deactivateUser(${u.id}, '${esc(u.first_name)} ${esc(u.last_name)}')">Deaktivieren</button>`
                     : `<button class="btn btn-sm btn-success" onclick="window._reactivateUser(${u.id}, '${esc(u.first_name)} ${esc(u.last_name)}')">Aktivieren</button>`
                 ) : ''}
@@ -369,11 +586,11 @@ formEditUser.addEventListener('submit', async (e) => {
         btn.textContent = 'Speichern';
     }
 });
+
 window._deactivateUser = async function (id, name) {
     if (!confirm(`Möchten Sie "${name}" wirklich deaktivieren?\n\nDer Benutzer kann sich danach nicht mehr anmelden, aber die Daten bleiben erhalten.`)) {
         return;
     }
-
     try {
         await apiFetch(`/admin/users/${id}`, { method: 'DELETE' });
         await loadUsers();
@@ -386,7 +603,6 @@ window._reactivateUser = async function (id, name) {
     if (!confirm(`Möchten Sie "${name}" wieder aktivieren?`)) {
         return;
     }
-
     try {
         await apiFetch(`/admin/users/${id}`, {
             method: 'PUT',

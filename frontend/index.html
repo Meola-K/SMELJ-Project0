@@ -3,17 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ZeitStempel - Admin</title>
+    <title>ZeitStempel</title>
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
     <nav class="navbar">
         <div class="navbar-brand">ZeitStempel</div>
-        <div class="navbar-user">
+        <div class="navbar-links hidden" id="nav-links">
+            <a href="#" class="nav-link active" data-page="dashboard">Dashboard</a>
+            <a href="#" class="nav-link" data-page="admin" id="nav-admin-link">Benutzerverwaltung</a>
+        </div>
+        <div class="navbar-user hidden">
             <span id="nav-username"></span>
             <button id="btn-logout" class="btn btn-sm">Abmelden</button>
         </div>
     </nav>
+
     <div id="page-login" class="page">
         <div class="login-card">
             <h2>Anmelden</h2>
@@ -29,13 +34,67 @@
             <button id="btn-login" class="btn btn-primary btn-block">Anmelden</button>
         </div>
     </div>
+
+    <div id="page-dashboard" class="page hidden">
+        <div class="container">
+            <div class="dashboard-grid">
+                <div class="card stamp-card">
+                    <div class="stamp-status" id="stamp-status">
+                        <div class="stamp-indicator" id="stamp-indicator"></div>
+                        <span id="stamp-status-text">Lädt...</span>
+                    </div>
+                    <button id="btn-stamp" class="btn btn-stamp" disabled>Stempeln</button>
+                    <div class="stamp-info">
+                        <div class="stamp-info-item">
+                            <span class="stamp-info-label">Heute gearbeitet</span>
+                            <span class="stamp-info-value" id="today-minutes">--:--</span>
+                        </div>
+                        <div class="stamp-info-item">
+                            <span class="stamp-info-label">Monatssaldo</span>
+                            <span class="stamp-info-value" id="month-balance">--:--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Heutige Stempelzeiten</h3>
+                    <div id="today-stamps-list" class="stamps-list">
+                        <p class="text-muted">Lädt...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card history-card">
+                <div class="history-header">
+                    <h3>Vergangene Stempelzeiten</h3>
+                    <div class="history-filter">
+                        <input type="date" id="history-from">
+                        <span>bis</span>
+                        <input type="date" id="history-to">
+                        <button class="btn btn-sm btn-primary" id="btn-load-history">Laden</button>
+                    </div>
+                </div>
+                <table class="table" id="history-table">
+                    <thead>
+                        <tr>
+                            <th>Datum</th>
+                            <th>Einstempeln</th>
+                            <th>Ausstempeln</th>
+                            <th>Dauer</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <div id="page-admin" class="page hidden">
         <div class="container">
             <div class="page-header">
                 <h1>Benutzerverwaltung</h1>
                 <button id="btn-open-create-user" class="btn btn-primary">+ Nutzer Anlegen</button>
             </div>
-
             <div id="users-table-wrap">
                 <table class="table" id="users-table">
                     <thead>
@@ -54,6 +113,7 @@
             </div>
         </div>
     </div>
+
     <div id="modal-create-user" class="modal hidden">
         <div class="modal-backdrop"></div>
         <div class="modal-content">
@@ -84,7 +144,6 @@
                     <input type="password" id="cu-password" required minlength="6">
                     <span class="form-hint">Mindestens 6 Zeichen</span>
                 </div>
-
                 <div class="form-group">
                     <label for="cu-role">Rolle *</label>
                     <select id="cu-role" required>
@@ -112,6 +171,7 @@
             </form>
         </div>
     </div>
+
     <div id="modal-edit-user" class="modal hidden">
         <div class="modal-backdrop modal-backdrop-edit"></div>
         <div class="modal-content">
