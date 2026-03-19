@@ -11,6 +11,7 @@
         <div class="navbar-brand">ZeitStempel</div>
         <div class="navbar-links hidden" id="nav-links">
             <a href="#" class="nav-link active" data-page="dashboard">Dashboard</a>
+            <a href="#" class="nav-link hidden" data-page="groups" id="nav-groups-link">Gruppen</a>
             <a href="#" class="nav-link" data-page="admin" id="nav-admin-link">Benutzerverwaltung</a>
         </div>
         <div class="navbar-user hidden">
@@ -86,6 +87,24 @@
                     <tbody id="history-tbody"></tbody>
                 </table>
             </div>
+        </div>
+    </div>
+
+    <div id="page-groups" class="page hidden">
+        <div class="container">
+            <div class="page-header">
+                <h1>Gruppenverwaltung</h1>
+                <div class="page-header-actions">
+                    <input type="text" id="new-group-name" placeholder="Neuer Gruppenname">
+                    <button class="btn btn-primary" id="btn-create-group">+ Gruppe erstellen</button>
+                </div>
+            </div>
+            <table class="table">
+                <thead>
+                    <tr><th>Name</th><th>Mitglieder</th><th>Erstellt am</th><th>Aktionen</th></tr>
+                </thead>
+                <tbody id="groups-tbody"></tbody>
+            </table>
         </div>
     </div>
 

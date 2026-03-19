@@ -131,6 +131,8 @@ body {
 }
 
 .page-header h1 { font-size: 1.5rem; }
+.page-header-actions { display: flex; gap: 0.5rem; align-items: center; }
+.page-header-actions input { padding: 0.4rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius); font-size: 0.875rem; }
 .hidden { display: none !important; }
 
 .login-card {

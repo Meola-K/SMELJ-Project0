@@ -11,6 +11,8 @@ const btnLogout = document.getElementById('btn-logout');
 const navUsername = document.getElementById('nav-username');
 const navLinks = document.getElementById('nav-links');
 const navAdminLink = document.getElementById('nav-admin-link');
+const navGroupsLink = document.getElementById('nav-groups-link');
+const pageGroups = document.getElementById('page-groups');
 
 const modal = document.getElementById('modal-create-user');
 const btnOpenModal = document.getElementById('btn-open-create-user');
@@ -47,7 +49,7 @@ let allGroups = [];
 let isStampedIn = false;
 let todayTimer = null;
 
-const pages = { dashboard: pageDashboard, admin: pageAdmin };
+const pages = { dashboard: pageDashboard, admin: pageAdmin, groups: pageGroups };
 
 function navigateTo(page) {
     Object.values(pages).forEach(p => p.classList.add('hidden'));
@@ -58,6 +60,7 @@ function navigateTo(page) {
 
     if (page === 'dashboard') loadDashboard();
     if (page === 'admin') { loadUsers(); loadGroups(); }
+    if (page === 'groups') loadGroupsPage();
 }
 
 document.querySelectorAll('.nav-link').forEach(link => {
@@ -126,6 +129,7 @@ function showApp() {
     } else {
         navAdminLink.classList.add('hidden');
     }
+    navGroupsLink.classList.toggle('hidden', role !== 'admin');
 
     navigateTo('dashboard');
 }
@@ -612,6 +616,52 @@ window._reactivateUser = async function (id, name) {
     } catch (err) {
         alert('Fehler: ' + err.message);
     }
+};
+
+async function loadGroupsPage() {
+    try {
+        allGroups = await apiFetch('/admin/groups');
+        renderGroupsTable();
+    } catch (err) { console.error(err); }
+}
+
+function renderGroupsTable() {
+    const tbody = document.getElementById('groups-tbody');
+    if (allGroups.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-muted">Keine Gruppen vorhanden.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = allGroups.map(g => `
+        <tr>
+            <td>${esc(g.name)}</td>
+            <td>${g.member_count}</td>
+            <td>${formatDate(g.created_at)}</td>
+            <td>
+                <button class="btn btn-sm btn-danger" onclick="window._deleteGroup(${g.id}, '${esc(g.name)}', ${g.member_count})">Löschen</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+document.getElementById('btn-create-group').addEventListener('click', async () => {
+    const input = document.getElementById('new-group-name');
+    const name = input.value.trim();
+    if (!name) return;
+    try {
+        await apiFetch('/admin/groups', { method: 'POST', body: JSON.stringify({ name }) });
+        input.value = '';
+        loadGroupsPage();
+    } catch (err) { alert('Fehler: ' + err.message); }
+});
+
+window._deleteGroup = async function (id, name, memberCount) {
+    let msg = `Gruppe "${name}" wirklich löschen?`;
+    if (memberCount > 0) msg += `\n\n${memberCount} Mitglieder werden keiner Gruppe mehr zugeordnet.`;
+    if (!confirm(msg)) return;
+    try {
+        await apiFetch(`/admin/groups/${id}`, { method: 'DELETE' });
+        loadGroupsPage();
+    } catch (err) { alert('Fehler: ' + err.message); }
 };
 
 function esc(str) {
