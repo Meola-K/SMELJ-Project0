@@ -83,7 +83,18 @@ CREATE TABLE devices (
     FOREIGN KEY (assign_user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
+CREATE TABLE vacation_entitlements (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    year INT NOT NULL,
+    total_days INT NOT NULL DEFAULT 30,
+    UNIQUE KEY unique_user_year (user_id, year),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 INSERT INTO groups_table (name) VALUES ('Allgemein'), ('Entwicklung'), ('Verwaltung');
 
 INSERT INTO users (email, password, first_name, last_name, role, group_id)
 VALUES ('admin@zeitstempel.de', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'System', 'Admin', 'admin', 3);
+
+INSERT INTO vacation_entitlements (user_id, year, total_days) VALUES (1, 2026, 30);

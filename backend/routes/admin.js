@@ -53,6 +53,9 @@ router.post('/users', auth, role('admin'), async (req, res) => {
             'INSERT INTO time_limits (user_id) VALUES (?)', [result.insertId]
         );
 
+        const year = new Date().getFullYear();
+        await db.query('INSERT INTO vacation_entitlements (user_id, year, total_days) VALUES (?, ?, 30)', [result.insertId, year]);
+
         const weekdays = [0, 1, 2, 3, 4];
         for (const day of weekdays) {
             await db.query(
@@ -399,6 +402,60 @@ router.get('/stats', auth, role('admin'), async (req, res) => {
             stampedIn: stampedIn[0].count,
             pendingRequests: pendingReqs[0].count,
             activeDevices: activeDevices[0].count
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+router.get('/vacation/balance', auth, async (req, res) => {
+    try {
+        const userId = req.query.userId ? parseInt(req.query.userId) : req.user.id;
+        if (userId !== req.user.id && req.user.role === 'arbeiter') {
+            return res.status(403).json({ error: 'Keine Berechtigung' });
+        }
+
+        const year = parseInt(req.query.year) || new Date().getFullYear();
+
+        const [entitlement] = await db.query(
+            'SELECT * FROM vacation_entitlements WHERE user_id = ? AND year = ?',
+            [userId, year]
+        );
+        const totalDays = entitlement.length ? entitlement[0].total_days : 30;
+
+        const [approved] = await db.query(
+            `SELECT date_from, date_to FROM requests
+             WHERE user_id = ? AND type = 'urlaub' AND status = 'approved'
+             AND YEAR(date_from) = ?`,
+            [userId, year]
+        );
+
+        let usedDays = 0;
+        approved.forEach(r => {
+            const from = new Date(r.date_from);
+            const to = new Date(r.date_to);
+            const current = new Date(from);
+            while (current <= to) {
+                const dow = current.getDay();
+                if (dow !== 0 && dow !== 6) usedDays++;
+                current.setDate(current.getDate() + 1);
+            }
+        });
+
+        const [pending] = await db.query(
+            `SELECT COUNT(*) as count FROM requests
+             WHERE user_id = ? AND type = 'urlaub' AND status = 'pending'
+             AND YEAR(date_from) = ?`,
+            [userId, year]
+        );
+
+        res.json({
+            year,
+            totalDays,
+            usedDays,
+            remainingDays: totalDays - usedDays,
+            pendingRequests: pending[0].count
         });
     } catch (err) {
         console.error(err);

@@ -164,6 +164,7 @@ async function loadDashboard() {
         historyFrom.value = firstOfMonth.toISOString().split('T')[0];
         historyTo.value = now.toISOString().split('T')[0];
         loadHistory();
+        loadVacation();
 
         clearInterval(todayTimer);
         if (isStampedIn) {
@@ -617,6 +618,20 @@ window._reactivateUser = async function (id, name) {
         alert('Fehler: ' + err.message);
     }
 };
+
+async function loadVacation() {
+    try {
+        const data = await apiFetch('/admin/vacation/balance');
+        document.getElementById('vacation-year').textContent = data.year;
+        document.getElementById('vacation-total').textContent = data.totalDays;
+        document.getElementById('vacation-used').textContent = data.usedDays;
+        document.getElementById('vacation-remaining').textContent = data.remainingDays;
+        const pct = data.totalDays > 0 ? Math.min((data.usedDays / data.totalDays) * 100, 100) : 0;
+        document.getElementById('vacation-bar').style.width = `${pct}%`;
+        const pendingEl = document.getElementById('vacation-pending-text');
+        pendingEl.textContent = data.pendingRequests > 0 ? `${data.pendingRequests} offene(r) Urlaubsantrag/-anträge` : '';
+    } catch (err) { console.error(err); }
+}
 
 async function loadGroupsPage() {
     try {

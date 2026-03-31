@@ -351,6 +351,16 @@ body {
 }
 
 .text-muted { color: var(--text-muted); }
+.text-sm { font-size: 0.8rem; }
+
+.vacation-card { margin-bottom: 1.5rem; }
+.vacation-stats { display: flex; gap: 2rem; justify-content: center; margin-bottom: 1rem; }
+.vacation-stat { display: flex; flex-direction: column; align-items: center; }
+.vacation-stat-value { font-size: 1.6rem; font-weight: 700; }
+.vacation-stat-label { font-size: 0.75rem; color: var(--text-muted); }
+.vacation-remaining { color: var(--primary); }
+.vacation-bar-wrap { background: var(--bg); border-radius: 999px; height: 8px; overflow: hidden; margin-bottom: 0.5rem; }
+.vacation-bar { height: 100%; background: var(--primary); border-radius: 999px; transition: width 0.4s; }
 
 .history-card { margin-bottom: 1.5rem; }
 
