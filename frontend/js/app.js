@@ -33,8 +33,15 @@ const cuSupervisor = document.getElementById('cu-supervisor');
 const cuEmailHint = document.getElementById('cu-email-hint');
 
 const btnStamp = document.getElementById('btn-stamp');
+const btnStampText = document.getElementById('btn-stamp-text');
+const stampSpinner = document.getElementById('stamp-spinner');
 const stampIndicator = document.getElementById('stamp-indicator');
 const stampStatusText = document.getElementById('stamp-status-text');
+const stampLastTime = document.getElementById('stamp-last-time');
+const stampLastLabel = document.getElementById('stamp-last-label');
+const stampLastClock = document.getElementById('stamp-last-clock');
+const stampWarning = document.getElementById('stamp-warning');
+const stampWarningText = document.getElementById('stamp-warning-text');
 const todayMinutesEl = document.getElementById('today-minutes');
 const monthBalanceEl = document.getElementById('month-balance');
 const todayStampsList = document.getElementById('today-stamps-list');
@@ -156,7 +163,8 @@ async function loadDashboard() {
     try {
         const data = await apiFetch('/stamp/today');
         isStampedIn = data.isStampedIn;
-        updateStampUI(data.todayMinutes, data.balance);
+        const lastStamp = data.stamps && data.stamps.length ? data.stamps[data.stamps.length - 1] : null;
+        updateStampUI(data.todayMinutes, data.balance, lastStamp);
         renderTodayStamps(data.stamps);
 
         const now = new Date();
@@ -172,7 +180,8 @@ async function loadDashboard() {
             todayTimer = setInterval(async () => {
                 try {
                     const fresh = await apiFetch('/stamp/today');
-                    updateStampUI(fresh.todayMinutes, fresh.balance);
+                    const freshLast = fresh.stamps && fresh.stamps.length ? fresh.stamps[fresh.stamps.length - 1] : null;
+                    updateStampUI(fresh.todayMinutes, fresh.balance, freshLast);
                 } catch {}
             }, 30000);
         }
@@ -181,53 +190,93 @@ async function loadDashboard() {
     }
 }
 
-function updateStampUI(todayMins, balance) {
+function updateStampUI(todayMins, balance, lastStamp) {
     stampIndicator.className = `stamp-indicator ${isStampedIn ? 'in' : 'out'}`;
     stampStatusText.textContent = isStampedIn ? 'Eingestempelt' : 'Ausgestempelt';
     btnStamp.disabled = false;
-    btnStamp.textContent = isStampedIn ? 'Ausstempeln' : 'Einstempeln';
+    btnStampText.textContent = isStampedIn ? 'Ausstempeln' : 'Einstempeln';
     btnStamp.className = `btn btn-stamp ${isStampedIn ? 'stamp-out' : 'stamp-in'}`;
     todayMinutesEl.textContent = formatMinutes(todayMins);
     monthBalanceEl.textContent = formatMinutes(balance);
     monthBalanceEl.className = `stamp-info-value ${balance >= 0 ? 'positive' : 'negative'}`;
+
+    // Last stamp time display
+    if (lastStamp) {
+        const time = formatTime(lastStamp.stamp_time);
+        stampLastLabel.textContent = lastStamp.type === 'in' ? 'Eingestempelt um' : 'Ausgestempelt um';
+        stampLastClock.textContent = time;
+        stampLastTime.classList.remove('hidden');
+    } else {
+        stampLastTime.classList.add('hidden');
+    }
 }
+
+function showStampWarning(text) {
+    stampWarningText.textContent = text;
+    stampWarning.classList.remove('hidden');
+    // Re-trigger animation
+    stampWarning.style.animation = 'none';
+    stampWarning.offsetHeight; // reflow
+    stampWarning.style.animation = '';
+}
+
+function hideStampWarning() {
+    stampWarning.classList.add('hidden');
+}
+
 
 function renderTodayStamps(stamps) {
     if (!stamps || stamps.length === 0) {
         todayStampsList.innerHTML = '<p class="text-muted">Heute noch keine Stempelzeiten.</p>';
         return;
     }
+    const sourceLabel = { web: 'Web', arduino: 'NFC', app: 'App' };
     todayStampsList.innerHTML = stamps.map(s => `
         <div class="stamp-entry">
             <div class="stamp-entry-icon ${s.type}"></div>
             <span class="stamp-entry-time">${formatTime(s.stamp_time)}</span>
             <span class="stamp-entry-label">${s.type === 'in' ? 'Einstempeln' : 'Ausstempeln'}</span>
+            <span class="stamp-entry-source">${sourceLabel[s.source] || s.source || ''}</span>
         </div>
     `).join('');
 }
 
 btnStamp.addEventListener('click', async () => {
     btnStamp.disabled = true;
+    hideStampWarning();
+
+    // Show spinner
+    stampSpinner.classList.remove('hidden');
+    btnStampText.textContent = 'Wird verarbeitet...';
+
     try {
         const result = await apiFetch('/stamp', {
             method: 'POST',
             body: JSON.stringify({ source: 'web' }),
         });
 
+        // Hide spinner
+        stampSpinner.classList.add('hidden');
+
         if (!result.success) {
-            alert(result.warning || 'Stempeln fehlgeschlagen');
+            // Kernzeit-Blockierung: zeige Warnung, kein Stempel
+            showStampWarning(result.warning || 'Stempeln fehlgeschlagen');
             btnStamp.disabled = false;
+            btnStampText.textContent = isStampedIn ? 'Ausstempeln' : 'Einstempeln';
             return;
         }
 
+        // Kernzeitwarnung (nicht blockierend)
         if (result.warning) {
-            alert(result.warning);
+            showStampWarning(result.warning);
         }
 
         isStampedIn = result.type === 'in';
-        updateStampUI(result.todayMinutes, result.balance);
 
+        // Fetch fresh today data for stamps list + last stamp
         const fresh = await apiFetch('/stamp/today');
+        const freshLast = fresh.stamps && fresh.stamps.length ? fresh.stamps[fresh.stamps.length - 1] : null;
+        updateStampUI(fresh.todayMinutes, fresh.balance, freshLast);
         renderTodayStamps(fresh.stamps);
 
         clearInterval(todayTimer);
@@ -235,15 +284,19 @@ btnStamp.addEventListener('click', async () => {
             todayTimer = setInterval(async () => {
                 try {
                     const f = await apiFetch('/stamp/today');
-                    updateStampUI(f.todayMinutes, f.balance);
+                    const fLast = f.stamps && f.stamps.length ? f.stamps[f.stamps.length - 1] : null;
+                    updateStampUI(f.todayMinutes, f.balance, fLast);
                 } catch {}
             }, 30000);
         }
     } catch (err) {
-        alert('Fehler: ' + err.message);
+        stampSpinner.classList.add('hidden');
+        showStampWarning('Fehler: ' + err.message);
         btnStamp.disabled = false;
+        btnStampText.textContent = isStampedIn ? 'Ausstempeln' : 'Einstempeln';
     }
 });
+
 
 async function loadHistory() {
     const from = historyFrom.value;

@@ -44,7 +44,20 @@
                         <div class="stamp-indicator" id="stamp-indicator"></div>
                         <span id="stamp-status-text">Lädt...</span>
                     </div>
-                    <button id="btn-stamp" class="btn btn-stamp" disabled>Stempeln</button>
+                    <div class="stamp-last-time hidden" id="stamp-last-time">
+                        <span class="stamp-last-label" id="stamp-last-label"></span>
+                        <span class="stamp-last-clock" id="stamp-last-clock"></span>
+                    </div>
+                    <button id="btn-stamp" class="btn btn-stamp" disabled>
+                        <span class="btn-stamp-inner">
+                            <span class="stamp-spinner hidden" id="stamp-spinner"></span>
+                            <span id="btn-stamp-text">Stempeln</span>
+                        </span>
+                    </button>
+                    <div class="stamp-warning hidden" id="stamp-warning">
+                        <span class="stamp-warning-icon">⚠</span>
+                        <span id="stamp-warning-text"></span>
+                    </div>
                     <div class="stamp-info">
                         <div class="stamp-info-item">
                             <span class="stamp-info-label">Heute gearbeitet</span>
