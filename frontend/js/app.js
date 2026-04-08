@@ -165,6 +165,7 @@ async function loadDashboard() {
         historyTo.value = now.toISOString().split('T')[0];
         loadHistory();
         loadVacation();
+        loadMyRequests();
 
         clearInterval(todayTimer);
         if (isStampedIn) {
@@ -685,3 +686,138 @@ function esc(str) {
     div.textContent = str;
     return div.innerHTML;
 }
+
+// ── Meine Anträge ─────────────────────────────────────────
+
+const requestModal = document.getElementById('modal-new-request');
+const btnNewRequest = document.getElementById('btn-new-request');
+const btnCloseRequestModal = document.getElementById('btn-close-request-modal');
+const btnCancelRequestModal = document.getElementById('btn-cancel-request-modal');
+const btnSubmitRequest = document.getElementById('btn-submit-request');
+const newRequestError = document.getElementById('new-request-error');
+const newRequestSuccess = document.getElementById('new-request-success');
+const requestsTbody = document.getElementById('requests-tbody');
+const requestsTable = document.getElementById('requests-table');
+const requestsEmpty = document.getElementById('requests-empty');
+
+const typeLabels = {
+    urlaub: 'Urlaub',
+    gleitzeit: 'Gleitzeit',
+    homeoffice: 'Homeoffice',
+    krank: 'Krank',
+};
+
+const statusLabels = {
+    pending: 'Ausstehend',
+    approved: 'Genehmigt',
+    denied: 'Abgelehnt',
+};
+
+function openRequestModal() {
+    newRequestError.classList.add('hidden');
+    newRequestSuccess.classList.add('hidden');
+    document.getElementById('req-type').value = 'urlaub';
+    document.getElementById('req-from').value = '';
+    document.getElementById('req-to').value = '';
+    document.getElementById('req-note').value = '';
+    requestModal.classList.remove('hidden');
+}
+
+function closeRequestModal() {
+    requestModal.classList.add('hidden');
+}
+
+btnNewRequest.addEventListener('click', openRequestModal);
+btnCloseRequestModal.addEventListener('click', closeRequestModal);
+btnCancelRequestModal.addEventListener('click', closeRequestModal);
+document.querySelector('.modal-backdrop-request')?.addEventListener('click', closeRequestModal);
+
+btnSubmitRequest.addEventListener('click', async () => {
+    newRequestError.classList.add('hidden');
+    newRequestSuccess.classList.add('hidden');
+
+    const type = document.getElementById('req-type').value;
+    const dateFrom = document.getElementById('req-from').value;
+    const dateTo = document.getElementById('req-to').value;
+    const note = document.getElementById('req-note').value.trim();
+
+    if (!dateFrom || !dateTo) {
+        newRequestError.textContent = 'Bitte Start- und Enddatum angeben.';
+        newRequestError.classList.remove('hidden');
+        return;
+    }
+
+    btnSubmitRequest.disabled = true;
+    btnSubmitRequest.textContent = 'Wird gesendet...';
+
+    try {
+        await apiFetch('/requests', {
+            method: 'POST',
+            body: JSON.stringify({ type, dateFrom, dateTo, note: note || undefined }),
+        });
+        newRequestSuccess.textContent = 'Antrag erfolgreich eingereicht!';
+        newRequestSuccess.classList.remove('hidden');
+        await loadMyRequests();
+        setTimeout(() => {
+            closeRequestModal();
+            newRequestSuccess.classList.add('hidden');
+        }, 1200);
+    } catch (err) {
+        newRequestError.textContent = err.message;
+        newRequestError.classList.remove('hidden');
+    } finally {
+        btnSubmitRequest.disabled = false;
+        btnSubmitRequest.textContent = 'Antrag stellen';
+    }
+});
+
+async function loadMyRequests() {
+    try {
+        const requests = await apiFetch('/requests/my');
+        renderMyRequests(requests);
+    } catch (err) {
+        console.error('Fehler beim Laden der Anträge:', err);
+    }
+}
+
+function renderMyRequests(requests) {
+    if (!requests || requests.length === 0) {
+        requestsTable.classList.add('hidden');
+        requestsEmpty.classList.remove('hidden');
+        return;
+    }
+    requestsTable.classList.remove('hidden');
+    requestsEmpty.classList.add('hidden');
+
+    requestsTbody.innerHTML = requests.map(r => {
+        const statusClass = `badge-${r.status}`;
+        const statusLabel = statusLabels[r.status] || r.status;
+        const fromDate = formatDate(r.date_from);
+        const toDate = formatDate(r.date_to);
+        const zeitraum = fromDate === toDate ? fromDate : `${fromDate} – ${toDate}`;
+        const bearbeiter = r.reviewer_name ? esc(r.reviewer_name) : '–';
+        const withdrawBtn = r.status === 'pending'
+            ? `<button class="btn btn-sm btn-withdraw" onclick="window._withdrawRequest(${r.id})">Zurückziehen</button>`
+            : '';
+        return `
+            <tr>
+                <td>${esc(typeLabels[r.type] || r.type)}</td>
+                <td>${zeitraum}</td>
+                <td><span class="badge ${statusClass}">${statusLabel}</span></td>
+                <td>${bearbeiter}</td>
+                <td>${withdrawBtn}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+window._withdrawRequest = async function(id) {
+    if (!confirm('Möchten Sie diesen Antrag wirklich zurückziehen?')) return;
+    try {
+        await apiFetch(`/requests/${id}`, { method: 'DELETE' });
+        await loadMyRequests();
+        await loadVacation();
+    } catch (err) {
+        alert('Fehler: ' + err.message);
+    }
+};

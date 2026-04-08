@@ -500,3 +500,15 @@ body {
         align-items: flex-start;
     }
 }
+
+/* ── Meine Anträge ───────────────────────────────────── */
+.requests-card { margin-bottom: 1.5rem; }
+.requests-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+.requests-header h3 { margin: 0; }
+
+.badge-pending  { background: #fef9c3; color: #854d0e; }
+.badge-approved { background: #dcfce7; color: #166534; }
+.badge-denied   { background: #fee2e2; color: #991b1b; }
+
+.btn-withdraw { background: #fee2e2; color: #991b1b; border: none; }
+.btn-withdraw:hover { background: #fecaca; }
