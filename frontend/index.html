@@ -89,6 +89,47 @@
             <!-- Dashboard -->
             <div id="page-dashboard" class="page hidden">
                 <div class="container">
+
+                    <!-- Admin KPI Stats (nur für Admin sichtbar) -->
+                    <div id="admin-stats" class="admin-stats hidden">
+                        <div class="admin-stat-card">
+                            <div class="admin-stat-icon admin-stat-icon--users">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                            </div>
+                            <div class="admin-stat-content">
+                                <span class="admin-stat-value" id="stat-total-users">–</span>
+                                <span class="admin-stat-label">Mitarbeiter</span>
+                            </div>
+                        </div>
+                        <div class="admin-stat-card">
+                            <div class="admin-stat-icon admin-stat-icon--stamped">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            </div>
+                            <div class="admin-stat-content">
+                                <span class="admin-stat-value" id="stat-stamped-in">–</span>
+                                <span class="admin-stat-label">Eingestempelt</span>
+                            </div>
+                        </div>
+                        <div class="admin-stat-card">
+                            <div class="admin-stat-icon admin-stat-icon--requests">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                            </div>
+                            <div class="admin-stat-content">
+                                <span class="admin-stat-value" id="stat-pending-requests">–</span>
+                                <span class="admin-stat-label">Offene Anträge</span>
+                            </div>
+                        </div>
+                        <div class="admin-stat-card">
+                            <div class="admin-stat-icon admin-stat-icon--devices">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 3h-8l-2 4h12z"/></svg>
+                            </div>
+                            <div class="admin-stat-content">
+                                <span class="admin-stat-value" id="stat-active-devices">–</span>
+                                <span class="admin-stat-label">Aktive Geräte</span>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="dashboard-grid">
                         <div class="card stamp-card">
                             <div class="stamp-status" id="stamp-status">

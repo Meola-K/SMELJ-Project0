@@ -222,8 +222,32 @@ function esc(str) {
     return div.innerHTML;
 }
 
+// ── Admin KPI Stats ─────────────────────────────────────────
+async function loadAdminStats() {
+    const statsEl = document.getElementById('admin-stats');
+    if (!currentUser || currentUser.role !== 'admin') {
+        statsEl.classList.add('hidden');
+        return;
+    }
+
+    statsEl.classList.remove('hidden');
+
+    try {
+        const stats = await apiFetch('/admin/stats');
+        document.getElementById('stat-total-users').textContent = stats.totalUsers;
+        document.getElementById('stat-stamped-in').textContent = stats.stampedIn;
+        document.getElementById('stat-pending-requests').textContent = stats.pendingRequests;
+        document.getElementById('stat-active-devices').textContent = stats.activeDevices;
+    } catch (err) {
+        console.error('Admin-Stats Fehler:', err);
+    }
+}
+
 // ── Dashboard ───────────────────────────────────────────────
 async function loadDashboard() {
+    // Admin KPI Stats laden (nur für Admin-Rolle)
+    loadAdminStats();
+
     try {
         const data = await apiFetch('/stamp/today');
         isStampedIn = data.isStampedIn;
