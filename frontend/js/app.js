@@ -3,6 +3,7 @@ import { apiFetch, setToken, clearToken, getToken } from './api.js';
 const pageLogin = document.getElementById('page-login');
 const pageDashboard = document.getElementById('page-dashboard');
 const pageAdmin = document.getElementById('page-admin');
+const pageTeam = document.getElementById('page-team');
 const loginEmail = document.getElementById('login-email');
 const loginPassword = document.getElementById('login-password');
 const loginError = document.getElementById('login-error');
@@ -11,6 +12,7 @@ const btnLogout = document.getElementById('btn-logout');
 const navUsername = document.getElementById('nav-username');
 const navLinks = document.getElementById('nav-links');
 const navAdminLink = document.getElementById('nav-admin-link');
+const navTeamLink = document.getElementById('nav-team-link');
 const navGroupsLink = document.getElementById('nav-groups-link');
 const pageGroups = document.getElementById('page-groups');
 
@@ -49,7 +51,7 @@ let allGroups = [];
 let isStampedIn = false;
 let todayTimer = null;
 
-const pages = { dashboard: pageDashboard, admin: pageAdmin, groups: pageGroups };
+const pages = { dashboard: pageDashboard, admin: pageAdmin, groups: pageGroups, team: pageTeam };
 
 function navigateTo(page) {
     Object.values(pages).forEach(p => p.classList.add('hidden'));
@@ -61,6 +63,7 @@ function navigateTo(page) {
     if (page === 'dashboard') loadDashboard();
     if (page === 'admin') { loadUsers(); loadGroups(); }
     if (page === 'groups') loadGroupsPage();
+    if (page === 'team') loadTeamPage();
 }
 
 document.querySelectorAll('.nav-link').forEach(link => {
@@ -126,8 +129,10 @@ function showApp() {
     const role = currentUser.role;
     if (role === 'admin' || role === 'vorgesetzter') {
         navAdminLink.classList.remove('hidden');
+         navTeamLink.classList.remove('hidden');
     } else {
         navAdminLink.classList.add('hidden');
+        navTeamLink.classList.add('hidden');
     }
     navGroupsLink.classList.toggle('hidden', role !== 'admin');
 
@@ -678,6 +683,51 @@ window._deleteGroup = async function (id, name, memberCount) {
         loadGroupsPage();
     } catch (err) { alert('Fehler: ' + err.message); }
 };
+
+async function loadTeamPage() {
+    const tbody = document.getElementById('team-tbody');
+    tbody.innerHTML = '<tr><td colspan="3" class="text-muted">Lade Daten…</td></tr>';
+    try {
+        const members = await apiFetch('/admin/team/online');
+        renderTeamTable(members);
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="3" class="text-muted">Fehler: ${esc(err.message)}</td></tr>`;
+    }
+}
+
+function renderTeamTable(members) {
+    const tbody = document.getElementById('team-tbody');
+
+    const present = members.filter(m => m.type === 'in').length;
+    const absent  = members.length - present;
+
+    document.getElementById('stat-present').textContent = present;
+    document.getElementById('stat-absent').textContent  = absent;
+    document.getElementById('stat-total').textContent   = members.length;
+
+    if (members.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-muted">Keine Mitarbeiter gefunden.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = members.map(m => {
+        const isPresent = m.type === 'in';
+        const statusBadge = isPresent
+            ? '<span class="badge badge-present">Anwesend</span>'
+            : '<span class="badge badge-absent">Abwesend</span>';
+        const lastAction = m.stamp_time
+            ? `${isPresent ? 'Eingestempelt' : 'Ausgestempelt'} ${formatTime(m.stamp_time)}`
+            : '–';
+        return `
+            <tr>
+                <td>${esc(m.last_name)}, ${esc(m.first_name)}</td>
+                <td>${statusBadge}</td>
+                <td>${lastAction}</td>
+            </tr>`;
+    }).join('');
+}
+
+document.getElementById('btn-refresh-team')?.addEventListener('click', loadTeamPage);
 
 function esc(str) {
     if (!str) return '';

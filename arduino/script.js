@@ -12,7 +12,7 @@ const clients = new Set()
 
 const demoUsers = {
     'A3:B2:C1:D0': { name: 'Med Köker', konto: '+12:30' },
-    'F1:E2:D3:C4': { name: 'Leon Kadown', konto: '-02:15' },
+    'F1:E2:D3:C4': { name: 'Leon Kadow', konto: '-02:15' },
     '11:22:33:44': { name: 'Julian Lo Castro', konto: '+08:45' }
 }
 

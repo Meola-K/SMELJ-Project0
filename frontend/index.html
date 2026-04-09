@@ -12,6 +12,7 @@
         <div class="navbar-links hidden" id="nav-links">
             <a href="#" class="nav-link active" data-page="dashboard">Dashboard</a>
             <a href="#" class="nav-link hidden" data-page="groups" id="nav-groups-link">Gruppen</a>
+            <a href="#" class="nav-link hidden" data-page="team" id="nav-team-link">Team</a>
             <a href="#" class="nav-link" data-page="admin" id="nav-admin-link">Benutzerverwaltung</a>
         </div>
         <div class="navbar-user hidden">
@@ -129,6 +130,45 @@
             </table>
         </div>
     </div>
+
+    
+    <div id="page-team" class="page hidden">
+        <div class="container">
+            <div class="page-header">
+                <h1>Team-Übersicht</h1>
+                <button id="btn-refresh-team" class="btn">&#8635; Aktualisieren</button>
+            </div>
+            <div class="team-stats" id="team-stats">
+                <div class="team-stat-card team-stat-present">
+                    <div class="team-stat-value" id="stat-present">–</div>
+                    <div class="team-stat-label">Anwesend</div>
+                </div>
+                <div class="team-stat-card team-stat-absent">
+                    <div class="team-stat-value" id="stat-absent">–</div>
+                    <div class="team-stat-label">Abwesend</div>
+                </div>
+                <div class="team-stat-card team-stat-total">
+                    <div class="team-stat-value" id="stat-total">–</div>
+                    <div class="team-stat-label">Gesamt</div>
+                </div>
+            </div>
+            <div class="card">
+                <table class="table" id="team-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Status</th>
+                            <th>Letzte Aktion</th>
+                        </tr>
+                    </thead>
+                    <tbody id="team-tbody">
+                        <tr><td colspan="3" class="text-muted">Lade Daten…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
 
     <div id="page-admin" class="page hidden">
         <div class="container">

@@ -500,3 +500,50 @@ body {
         align-items: flex-start;
     }
 }
+
+.team-stats {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.team-stat-card {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1rem;
+    text-align: center;
+    border-top: 4px solid var(--border);
+}
+
+.team-stat-present { border-top-color: #16a34a; }
+.team-stat-absent  { border-top-color: #dc2626; }
+.team-stat-total   { border-top-color: #2563eb; }
+
+.team-stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+}
+
+.team-stat-present .team-stat-value { color: #16a34a; }
+.team-stat-absent  .team-stat-value { color: #dc2626; }
+.team-stat-total   .team-stat-value { color: #2563eb; }
+
+.team-stat-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+}
+
+.badge-present { background: #dcfce7; color: #166534; }
+.badge-absent  { background: #fee2e2; color: #991b1b; }
+
+@media (max-width: 480px) {
+    .team-stats { flex-direction: column; }
+}
+
