@@ -7,20 +7,8 @@
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-    <nav class="navbar">
-        <div class="navbar-brand">ZeitStempel</div>
-        <div class="navbar-links hidden" id="nav-links">
-            <a href="#" class="nav-link active" data-page="dashboard">Dashboard</a>
-            <a href="#" class="nav-link hidden" data-page="groups" id="nav-groups-link">Gruppen</a>
-            <a href="#" class="nav-link hidden" data-page="team" id="nav-team-link">Team</a>
-            <a href="#" class="nav-link" data-page="admin" id="nav-admin-link">Benutzerverwaltung</a>
-        </div>
-        <div class="navbar-user hidden">
-            <span id="nav-username"></span>
-            <button id="btn-logout" class="btn btn-sm">Abmelden</button>
-        </div>
-    </nav>
 
+    <!-- ── Login Page (kein Sidebar) ────────────────────── -->
     <div id="page-login" class="page">
         <div class="login-card">
             <h2>Anmelden</h2>
@@ -37,237 +25,304 @@
         </div>
     </div>
 
-    <div id="page-dashboard" class="page hidden">
-        <div class="container">
-            <div class="dashboard-grid">
-                <div class="card stamp-card">
-                    <div class="stamp-status" id="stamp-status">
-                        <div class="stamp-indicator" id="stamp-indicator"></div>
-                        <span id="stamp-status-text">Lädt...</span>
-                    </div>
-                    <div class="stamp-last-time hidden" id="stamp-last-time">
-                        <span class="stamp-last-label" id="stamp-last-label"></span>
-                        <span class="stamp-last-clock" id="stamp-last-clock"></span>
-                    </div>
-                    <button id="btn-stamp" class="btn btn-stamp" disabled>
-                        <span class="btn-stamp-inner">
-                            <span class="stamp-spinner hidden" id="stamp-spinner"></span>
-                            <span id="btn-stamp-text">Stempeln</span>
-                        </span>
-                    </button>
-                    <div class="stamp-warning hidden" id="stamp-warning">
-                        <span class="stamp-warning-icon">⚠</span>
-                        <span id="stamp-warning-text"></span>
-                    </div>
-                    <div class="stamp-info">
-                        <div class="stamp-info-item">
-                            <span class="stamp-info-label">Heute gearbeitet</span>
-                            <span class="stamp-info-value" id="today-minutes">--:--</span>
-                        </div>
-                        <div class="stamp-info-item">
-                            <span class="stamp-info-label">Monatssaldo</span>
-                            <span class="stamp-info-value" id="month-balance">--:--</span>
-                        </div>
-                    </div>
-                </div>
+    <!-- ── App Shell (Sidebar + Content) ────────────────── -->
+    <div id="app-shell" class="app-shell hidden">
 
-                <div class="card">
-                    <h3>Heutige Stempelzeiten</h3>
-                    <div id="today-stamps-list" class="stamps-list">
-                        <p class="text-muted">Lädt...</p>
-                    </div>
+        <!-- Mobile Top Bar -->
+        <div class="mobile-topbar">
+            <button id="btn-hamburger" class="hamburger" aria-label="Menü öffnen">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <span class="mobile-topbar-brand">ZeitStempel</span>
+        </div>
+
+        <!-- Sidebar Overlay (Mobile) -->
+        <div id="sidebar-overlay" class="sidebar-overlay hidden"></div>
+
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <div class="sidebar-logo-icon">ZS</div>
+                    <span class="sidebar-logo-text">ZeitStempel</span>
                 </div>
             </div>
 
-            <div class="card vacation-card">
-                <h3>Urlaubskonto <span class="text-muted" id="vacation-year"></span></h3>
-                <div class="vacation-stats">
-                    <div class="vacation-stat">
-                        <span class="vacation-stat-value" id="vacation-total">--</span>
-                        <span class="vacation-stat-label">Anspruch</span>
-                    </div>
-                    <div class="vacation-stat">
-                        <span class="vacation-stat-value" id="vacation-used">--</span>
-                        <span class="vacation-stat-label">Genommen</span>
-                    </div>
-                    <div class="vacation-stat">
-                        <span class="vacation-stat-value vacation-remaining" id="vacation-remaining">--</span>
-                        <span class="vacation-stat-label">Verbleibend</span>
-                    </div>
-                </div>
-                <div class="vacation-bar-wrap">
-                    <div class="vacation-bar" id="vacation-bar"></div>
-                </div>
-                <p class="text-muted text-sm" id="vacation-pending-text"></p>
-            </div>
+            <nav class="sidebar-nav" id="sidebar-nav">
+                <a href="#dashboard" class="sidebar-link active" data-route="dashboard">
+                    <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#team" class="sidebar-link" data-route="team" data-roles="admin,vorgesetzter">
+                    <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    <span>Team</span>
+                </a>
+                <a href="#groups" class="sidebar-link" data-route="groups" data-roles="admin">
+                    <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    <span>Gruppen</span>
+                </a>
+                <a href="#admin" class="sidebar-link" data-route="admin" data-roles="admin,vorgesetzter">
+                    <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    <span>Verwaltung</span>
+                </a>
+            </nav>
 
-            <div class="card requests-card">
-                <div class="requests-header">
-                    <h3>Meine Anträge</h3>
-                    <button class="btn btn-sm btn-primary" id="btn-new-request">+ Neuer Antrag</button>
+            <div class="sidebar-footer">
+                <div class="sidebar-user">
+                    <div class="sidebar-user-avatar" id="sidebar-avatar">?</div>
+                    <div class="sidebar-user-info">
+                        <span class="sidebar-user-name" id="sidebar-username">–</span>
+                        <span class="sidebar-user-role" id="sidebar-role">–</span>
+                    </div>
                 </div>
-                <div id="requests-empty" class="text-muted hidden">Keine Anträge vorhanden.</div>
-                <table class="table" id="requests-table">
-                    <thead>
-                        <tr>
-                            <th>Typ</th>
-                            <th>Zeitraum</th>
-                            <th>Status</th>
-                            <th>Bearbeiter</th>
-                            <th>Aktionen</th>
-                        </tr>
-                    </thead>
-                    <tbody id="requests-tbody"></tbody>
-                </table>
+                <button id="btn-logout" class="sidebar-logout" title="Abmelden">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                </button>
             </div>
+        </aside>
 
-            <!-- Modal: Neuer Antrag -->
-            <div id="modal-new-request" class="modal hidden">
-                <div class="modal-backdrop modal-backdrop-request"></div>
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h2>Neuen Antrag stellen</h2>
-                        <button class="modal-close" id="btn-close-request-modal">&times;</button>
-                    </div>
-                    <div id="new-request-error" class="alert alert-error hidden"></div>
-                    <div id="new-request-success" class="alert alert-success hidden"></div>
-                    <div class="form-group">
-                        <label for="req-type">Antragstyp *</label>
-                        <select id="req-type">
-                            <option value="urlaub">Urlaub</option>
-                            <option value="gleitzeit">Gleitzeit</option>
-                            <option value="homeoffice">Homeoffice</option>
-                            <option value="krank">Krank</option>
-                        </select>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="req-from">Von *</label>
-                            <input type="date" id="req-from" required>
+        <!-- Main Content Area -->
+        <main class="main-content">
+
+            <!-- Dashboard -->
+            <div id="page-dashboard" class="page hidden">
+                <div class="container">
+                    <div class="dashboard-grid">
+                        <div class="card stamp-card">
+                            <div class="stamp-status" id="stamp-status">
+                                <div class="stamp-indicator" id="stamp-indicator"></div>
+                                <span id="stamp-status-text">Lädt...</span>
+                            </div>
+                            <div class="stamp-last-time hidden" id="stamp-last-time">
+                                <span class="stamp-last-label" id="stamp-last-label"></span>
+                                <span class="stamp-last-clock" id="stamp-last-clock"></span>
+                            </div>
+                            <button id="btn-stamp" class="btn btn-stamp" disabled>
+                                <span class="btn-stamp-inner">
+                                    <span class="stamp-spinner hidden" id="stamp-spinner"></span>
+                                    <span id="btn-stamp-text">Stempeln</span>
+                                </span>
+                            </button>
+                            <div class="stamp-warning hidden" id="stamp-warning">
+                                <span class="stamp-warning-icon">⚠</span>
+                                <span id="stamp-warning-text"></span>
+                            </div>
+                            <div class="stamp-info">
+                                <div class="stamp-info-item">
+                                    <span class="stamp-info-label">Heute gearbeitet</span>
+                                    <span class="stamp-info-value" id="today-minutes">--:--</span>
+                                </div>
+                                <div class="stamp-info-item">
+                                    <span class="stamp-info-label">Monatssaldo</span>
+                                    <span class="stamp-info-value" id="month-balance">--:--</span>
+                                </div>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="req-to">Bis *</label>
-                            <input type="date" id="req-to" required>
+
+                        <div class="card">
+                            <h3>Heutige Stempelzeiten</h3>
+                            <div id="today-stamps-list" class="stamps-list">
+                                <p class="text-muted">Lädt...</p>
+                            </div>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label for="req-note">Notiz</label>
-                        <input type="text" id="req-note" placeholder="Optional">
+
+                    <div class="card vacation-card">
+                        <h3>Urlaubskonto <span class="text-muted" id="vacation-year"></span></h3>
+                        <div class="vacation-stats">
+                            <div class="vacation-stat">
+                                <span class="vacation-stat-value" id="vacation-total">--</span>
+                                <span class="vacation-stat-label">Anspruch</span>
+                            </div>
+                            <div class="vacation-stat">
+                                <span class="vacation-stat-value" id="vacation-used">--</span>
+                                <span class="vacation-stat-label">Genommen</span>
+                            </div>
+                            <div class="vacation-stat">
+                                <span class="vacation-stat-value vacation-remaining" id="vacation-remaining">--</span>
+                                <span class="vacation-stat-label">Verbleibend</span>
+                            </div>
+                        </div>
+                        <div class="vacation-bar-wrap">
+                            <div class="vacation-bar" id="vacation-bar"></div>
+                        </div>
+                        <p class="text-muted text-sm" id="vacation-pending-text"></p>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn" id="btn-cancel-request-modal">Abbrechen</button>
-                        <button type="button" class="btn btn-primary" id="btn-submit-request">Antrag stellen</button>
+
+                    <div class="card requests-card">
+                        <div class="requests-header">
+                            <h3>Meine Anträge</h3>
+                            <button class="btn btn-sm btn-primary" id="btn-new-request">+ Neuer Antrag</button>
+                        </div>
+                        <div id="requests-empty" class="text-muted hidden">Keine Anträge vorhanden.</div>
+                        <table class="table" id="requests-table">
+                            <thead>
+                                <tr>
+                                    <th>Typ</th>
+                                    <th>Zeitraum</th>
+                                    <th>Status</th>
+                                    <th>Bearbeiter</th>
+                                    <th>Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody id="requests-tbody"></tbody>
+                        </table>
+                    </div>
+
+                    <!-- Modal: Neuer Antrag -->
+                    <div id="modal-new-request" class="modal hidden">
+                        <div class="modal-backdrop modal-backdrop-request"></div>
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h2>Neuen Antrag stellen</h2>
+                                <button class="modal-close" id="btn-close-request-modal">&times;</button>
+                            </div>
+                            <div id="new-request-error" class="alert alert-error hidden"></div>
+                            <div id="new-request-success" class="alert alert-success hidden"></div>
+                            <div class="form-group">
+                                <label for="req-type">Antragstyp *</label>
+                                <select id="req-type">
+                                    <option value="urlaub">Urlaub</option>
+                                    <option value="gleitzeit">Gleitzeit</option>
+                                    <option value="homeoffice">Homeoffice</option>
+                                    <option value="krank">Krank</option>
+                                </select>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="req-from">Von *</label>
+                                    <input type="date" id="req-from" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="req-to">Bis *</label>
+                                    <input type="date" id="req-to" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="req-note">Notiz</label>
+                                <input type="text" id="req-note" placeholder="Optional">
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn" id="btn-cancel-request-modal">Abbrechen</button>
+                                <button type="button" class="btn btn-primary" id="btn-submit-request">Antrag stellen</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card history-card">
+                        <div class="history-header">
+                            <h3>Vergangene Stempelzeiten</h3>
+                            <div class="history-filter">
+                                <input type="date" id="history-from">
+                                <span>bis</span>
+                                <input type="date" id="history-to">
+                                <button class="btn btn-sm btn-primary" id="btn-load-history">Laden</button>
+                            </div>
+                        </div>
+                        <table class="table" id="history-table">
+                            <thead>
+                                <tr>
+                                    <th>Datum</th>
+                                    <th>Einstempeln</th>
+                                    <th>Ausstempeln</th>
+                                    <th>Dauer</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-tbody"></tbody>
+                        </table>
                     </div>
                 </div>
             </div>
 
-            <div class="card history-card">
-                <div class="history-header">
-                    <h3>Vergangene Stempelzeiten</h3>
-                    <div class="history-filter">
-                        <input type="date" id="history-from">
-                        <span>bis</span>
-                        <input type="date" id="history-to">
-                        <button class="btn btn-sm btn-primary" id="btn-load-history">Laden</button>
+            <!-- Groups Page -->
+            <div id="page-groups" class="page hidden">
+                <div class="container">
+                    <div class="page-header">
+                        <h1>Gruppenverwaltung</h1>
+                        <div class="page-header-actions">
+                            <input type="text" id="new-group-name" placeholder="Neuer Gruppenname">
+                            <button class="btn btn-primary" id="btn-create-group">+ Gruppe erstellen</button>
+                        </div>
+                    </div>
+                    <table class="table">
+                        <thead>
+                            <tr><th>Name</th><th>Mitglieder</th><th>Erstellt am</th><th>Aktionen</th></tr>
+                        </thead>
+                        <tbody id="groups-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Team Page -->
+            <div id="page-team" class="page hidden">
+                <div class="container">
+                    <div class="page-header">
+                        <h1>Team-Übersicht</h1>
+                        <button id="btn-refresh-team" class="btn">&#8635; Aktualisieren</button>
+                    </div>
+                    <div class="team-stats" id="team-stats">
+                        <div class="team-stat-card team-stat-present">
+                            <div class="team-stat-value" id="stat-present">–</div>
+                            <div class="team-stat-label">Anwesend</div>
+                        </div>
+                        <div class="team-stat-card team-stat-absent">
+                            <div class="team-stat-value" id="stat-absent">–</div>
+                            <div class="team-stat-label">Abwesend</div>
+                        </div>
+                        <div class="team-stat-card team-stat-total">
+                            <div class="team-stat-value" id="stat-total">–</div>
+                            <div class="team-stat-label">Gesamt</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <table class="table" id="team-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Status</th>
+                                    <th>Letzte Aktion</th>
+                                </tr>
+                            </thead>
+                            <tbody id="team-tbody">
+                                <tr><td colspan="3" class="text-muted">Lade Daten…</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-                <table class="table" id="history-table">
-                    <thead>
-                        <tr>
-                            <th>Datum</th>
-                            <th>Einstempeln</th>
-                            <th>Ausstempeln</th>
-                            <th>Dauer</th>
-                        </tr>
-                    </thead>
-                    <tbody id="history-tbody"></tbody>
-                </table>
             </div>
-        </div>
-    </div>
 
-    <div id="page-groups" class="page hidden">
-        <div class="container">
-            <div class="page-header">
-                <h1>Gruppenverwaltung</h1>
-                <div class="page-header-actions">
-                    <input type="text" id="new-group-name" placeholder="Neuer Gruppenname">
-                    <button class="btn btn-primary" id="btn-create-group">+ Gruppe erstellen</button>
+            <!-- Admin Page -->
+            <div id="page-admin" class="page hidden">
+                <div class="container">
+                    <div class="page-header">
+                        <h1>Benutzerverwaltung</h1>
+                        <button id="btn-open-create-user" class="btn btn-primary">+ Nutzer Anlegen</button>
+                    </div>
+                    <div id="users-table-wrap">
+                        <table class="table" id="users-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>E-Mail</th>
+                                    <th>Rolle</th>
+                                    <th>Gruppe</th>
+                                    <th>Vorgesetzter</th>
+                                    <th>Status</th>
+                                    <th>Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-tbody"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
-            <table class="table">
-                <thead>
-                    <tr><th>Name</th><th>Mitglieder</th><th>Erstellt am</th><th>Aktionen</th></tr>
-                </thead>
-                <tbody id="groups-tbody"></tbody>
-            </table>
-        </div>
+
+        </main>
     </div>
 
-    
-    <div id="page-team" class="page hidden">
-        <div class="container">
-            <div class="page-header">
-                <h1>Team-Übersicht</h1>
-                <button id="btn-refresh-team" class="btn">&#8635; Aktualisieren</button>
-            </div>
-            <div class="team-stats" id="team-stats">
-                <div class="team-stat-card team-stat-present">
-                    <div class="team-stat-value" id="stat-present">–</div>
-                    <div class="team-stat-label">Anwesend</div>
-                </div>
-                <div class="team-stat-card team-stat-absent">
-                    <div class="team-stat-value" id="stat-absent">–</div>
-                    <div class="team-stat-label">Abwesend</div>
-                </div>
-                <div class="team-stat-card team-stat-total">
-                    <div class="team-stat-value" id="stat-total">–</div>
-                    <div class="team-stat-label">Gesamt</div>
-                </div>
-            </div>
-            <div class="card">
-                <table class="table" id="team-table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Status</th>
-                            <th>Letzte Aktion</th>
-                        </tr>
-                    </thead>
-                    <tbody id="team-tbody">
-                        <tr><td colspan="3" class="text-muted">Lade Daten…</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-
-    <div id="page-admin" class="page hidden">
-        <div class="container">
-            <div class="page-header">
-                <h1>Benutzerverwaltung</h1>
-                <button id="btn-open-create-user" class="btn btn-primary">+ Nutzer Anlegen</button>
-            </div>
-            <div id="users-table-wrap">
-                <table class="table" id="users-table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>E-Mail</th>
-                            <th>Rolle</th>
-                            <th>Gruppe</th>
-                            <th>Vorgesetzter</th>
-                            <th>Status</th>
-                            <th>Aktionen</th>
-                        </tr>
-                    </thead>
-                    <tbody id="users-tbody"></tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
+    <!-- ── Modals (außerhalb des Layouts) ──────────────── -->
     <div id="modal-create-user" class="modal hidden">
         <div class="modal-backdrop"></div>
         <div class="modal-content">

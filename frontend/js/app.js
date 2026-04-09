@@ -1,39 +1,25 @@
 import { apiFetch, setToken, clearToken, getToken } from './api.js';
+import { registerRoute, onNavigate, navigateTo, startRouter } from './router.js';
 
+// ── DOM References ──────────────────────────────────────────
 const pageLogin = document.getElementById('page-login');
-const pageDashboard = document.getElementById('page-dashboard');
-const pageAdmin = document.getElementById('page-admin');
-const pageTeam = document.getElementById('page-team');
+const appShell = document.getElementById('app-shell');
 const loginEmail = document.getElementById('login-email');
 const loginPassword = document.getElementById('login-password');
 const loginError = document.getElementById('login-error');
 const btnLogin = document.getElementById('btn-login');
 const btnLogout = document.getElementById('btn-logout');
-const navUsername = document.getElementById('nav-username');
-const navLinks = document.getElementById('nav-links');
-const navAdminLink = document.getElementById('nav-admin-link');
-const navTeamLink = document.getElementById('nav-team-link');
-const navGroupsLink = document.getElementById('nav-groups-link');
-const pageGroups = document.getElementById('page-groups');
 
-const modal = document.getElementById('modal-create-user');
-const btnOpenModal = document.getElementById('btn-open-create-user');
-const btnCloseModal = document.getElementById('btn-close-modal');
-const btnCancelModal = document.getElementById('btn-cancel-modal');
-const formCreateUser = document.getElementById('form-create-user');
-const createError = document.getElementById('create-user-error');
-const createSuccess = document.getElementById('create-user-success');
-const usersTbody = document.getElementById('users-tbody');
+// Sidebar
+const sidebar = document.getElementById('sidebar');
+const sidebarOverlay = document.getElementById('sidebar-overlay');
+const btnHamburger = document.getElementById('btn-hamburger');
+const sidebarNav = document.getElementById('sidebar-nav');
+const sidebarUsername = document.getElementById('sidebar-username');
+const sidebarRole = document.getElementById('sidebar-role');
+const sidebarAvatar = document.getElementById('sidebar-avatar');
 
-const cuFirstname = document.getElementById('cu-firstname');
-const cuLastname = document.getElementById('cu-lastname');
-const cuEmail = document.getElementById('cu-email');
-const cuPassword = document.getElementById('cu-password');
-const cuRole = document.getElementById('cu-role');
-const cuGroup = document.getElementById('cu-group');
-const cuSupervisor = document.getElementById('cu-supervisor');
-const cuEmailHint = document.getElementById('cu-email-hint');
-
+// Dashboard
 const btnStamp = document.getElementById('btn-stamp');
 const btnStampText = document.getElementById('btn-stamp-text');
 const stampSpinner = document.getElementById('stamp-spinner');
@@ -52,34 +38,105 @@ const historyFrom = document.getElementById('history-from');
 const historyTo = document.getElementById('history-to');
 const btnLoadHistory = document.getElementById('btn-load-history');
 
+// Admin / User CRUD
+const modal = document.getElementById('modal-create-user');
+const btnOpenModal = document.getElementById('btn-open-create-user');
+const btnCloseModal = document.getElementById('btn-close-modal');
+const btnCancelModal = document.getElementById('btn-cancel-modal');
+const formCreateUser = document.getElementById('form-create-user');
+const createError = document.getElementById('create-user-error');
+const createSuccess = document.getElementById('create-user-success');
+const usersTbody = document.getElementById('users-tbody');
+
+const cuFirstname = document.getElementById('cu-firstname');
+const cuLastname = document.getElementById('cu-lastname');
+const cuEmail = document.getElementById('cu-email');
+const cuPassword = document.getElementById('cu-password');
+const cuRole = document.getElementById('cu-role');
+const cuGroup = document.getElementById('cu-group');
+const cuSupervisor = document.getElementById('cu-supervisor');
+const cuEmailHint = document.getElementById('cu-email-hint');
+
 let currentUser = null;
 let allUsers = [];
 let allGroups = [];
 let isStampedIn = false;
 let todayTimer = null;
 
-const pages = { dashboard: pageDashboard, admin: pageAdmin, groups: pageGroups, team: pageTeam };
+// ── Rollenbasierte Navigation ───────────────────────────────
+const roleLabelsMap = { admin: 'Admin', vorgesetzter: 'Vorgesetzter', arbeiter: 'Mitarbeiter' };
 
-function navigateTo(page) {
-    Object.values(pages).forEach(p => p.classList.add('hidden'));
-    if (pages[page]) pages[page].classList.remove('hidden');
-    document.querySelectorAll('.nav-link').forEach(l => {
-        l.classList.toggle('active', l.dataset.page === page);
+function updateSidebarForRole(role) {
+    sidebarNav.querySelectorAll('.sidebar-link[data-roles]').forEach(link => {
+        const allowed = link.dataset.roles.split(',');
+        link.classList.toggle('hidden', !allowed.includes(role));
     });
-
-    if (page === 'dashboard') loadDashboard();
-    if (page === 'admin') { loadUsers(); loadGroups(); }
-    if (page === 'groups') loadGroupsPage();
-    if (page === 'team') loadTeamPage();
 }
 
-document.querySelectorAll('.nav-link').forEach(link => {
-    link.addEventListener('click', (e) => {
-        e.preventDefault();
-        navigateTo(link.dataset.page);
+function updateSidebarUser() {
+    const name = currentUser.first_name || currentUser.firstName;
+    const last = currentUser.last_name || currentUser.lastName;
+    sidebarUsername.textContent = `${name} ${last}`;
+    sidebarRole.textContent = roleLabelsMap[currentUser.role] || currentUser.role;
+    sidebarAvatar.textContent = `${(name || '?')[0]}${(last || '?')[0]}`.toUpperCase();
+}
+
+// ── Sidebar Active Link ─────────────────────────────────────
+onNavigate((routeName) => {
+    sidebarNav.querySelectorAll('.sidebar-link').forEach(link => {
+        link.classList.toggle('active', link.dataset.route === routeName);
     });
 });
 
+// ── Mobile Sidebar Toggle ───────────────────────────────────
+function openSidebar() {
+    sidebar.classList.add('is-open');
+    sidebarOverlay.classList.remove('hidden');
+    btnHamburger.classList.add('is-active');
+}
+
+function closeSidebar() {
+    sidebar.classList.remove('is-open');
+    sidebarOverlay.classList.add('hidden');
+    btnHamburger.classList.remove('is-active');
+}
+
+btnHamburger.addEventListener('click', () => {
+    sidebar.classList.contains('is-open') ? closeSidebar() : openSidebar();
+});
+
+sidebarOverlay.addEventListener('click', closeSidebar);
+
+// Sidebar-Links: auf Mobile nach Klick schließen
+sidebarNav.addEventListener('click', (e) => {
+    const link = e.target.closest('.sidebar-link');
+    if (link && window.innerWidth <= 768) {
+        closeSidebar();
+    }
+});
+
+// ── Routes registrieren ─────────────────────────────────────
+registerRoute('dashboard', {
+    pageId: 'page-dashboard',
+    onEnter: loadDashboard,
+});
+
+registerRoute('team', {
+    pageId: 'page-team',
+    onEnter: loadTeamPage,
+});
+
+registerRoute('groups', {
+    pageId: 'page-groups',
+    onEnter: loadGroupsPage,
+});
+
+registerRoute('admin', {
+    pageId: 'page-admin',
+    onEnter: () => { loadUsers(); loadGroups(); },
+});
+
+// ── Login ───────────────────────────────────────────────────
 btnLogin.addEventListener('click', async () => {
     loginError.classList.add('hidden');
     try {
@@ -103,16 +160,18 @@ loginPassword.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') btnLogin.click();
 });
 
+// ── Logout ──────────────────────────────────────────────────
 btnLogout.addEventListener('click', () => {
     clearToken();
     currentUser = null;
     clearInterval(todayTimer);
-    Object.values(pages).forEach(p => p.classList.add('hidden'));
+    appShell.classList.add('hidden');
     pageLogin.classList.remove('hidden');
-    navLinks.classList.add('hidden');
-    document.querySelector('.navbar-user').classList.add('hidden');
+    closeSidebar();
+    window.location.hash = '';
 });
 
+// ── Auto-Login ──────────────────────────────────────────────
 (async function init() {
     const token = getToken();
     if (!token) return;
@@ -125,27 +184,19 @@ btnLogout.addEventListener('click', () => {
     }
 })();
 
+// ── Show App ────────────────────────────────────────────────
 function showApp() {
     pageLogin.classList.add('hidden');
-    const name = currentUser.first_name || currentUser.firstName;
-    const last = currentUser.last_name || currentUser.lastName;
-    navUsername.textContent = `${name} ${last}`;
-    navLinks.classList.remove('hidden');
-    document.querySelector('.navbar-user').classList.remove('hidden');
+    appShell.classList.remove('hidden');
 
-    const role = currentUser.role;
-    if (role === 'admin' || role === 'vorgesetzter') {
-        navAdminLink.classList.remove('hidden');
-         navTeamLink.classList.remove('hidden');
-    } else {
-        navAdminLink.classList.add('hidden');
-        navTeamLink.classList.add('hidden');
-    }
-    navGroupsLink.classList.toggle('hidden', role !== 'admin');
+    updateSidebarUser();
+    updateSidebarForRole(currentUser.role);
 
-    navigateTo('dashboard');
+    // Router starten (setzt auch die initiale Route)
+    startRouter('dashboard');
 }
 
+// ── Helpers ─────────────────────────────────────────────────
 function formatMinutes(mins) {
     const sign = mins < 0 ? '-' : '';
     const abs = Math.abs(Math.floor(mins));
@@ -164,6 +215,14 @@ function formatDate(dateStr) {
     return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
 }
 
+function esc(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+// ── Dashboard ───────────────────────────────────────────────
 async function loadDashboard() {
     try {
         const data = await apiFetch('/stamp/today');
@@ -205,7 +264,6 @@ function updateStampUI(todayMins, balance, lastStamp) {
     monthBalanceEl.textContent = formatMinutes(balance);
     monthBalanceEl.className = `stamp-info-value ${balance >= 0 ? 'positive' : 'negative'}`;
 
-    // Last stamp time display
     if (lastStamp) {
         const time = formatTime(lastStamp.stamp_time);
         stampLastLabel.textContent = lastStamp.type === 'in' ? 'Eingestempelt um' : 'Ausgestempelt um';
@@ -219,16 +277,14 @@ function updateStampUI(todayMins, balance, lastStamp) {
 function showStampWarning(text) {
     stampWarningText.textContent = text;
     stampWarning.classList.remove('hidden');
-    // Re-trigger animation
     stampWarning.style.animation = 'none';
-    stampWarning.offsetHeight; // reflow
+    stampWarning.offsetHeight;
     stampWarning.style.animation = '';
 }
 
 function hideStampWarning() {
     stampWarning.classList.add('hidden');
 }
-
 
 function renderTodayStamps(stamps) {
     if (!stamps || stamps.length === 0) {
@@ -249,8 +305,6 @@ function renderTodayStamps(stamps) {
 btnStamp.addEventListener('click', async () => {
     btnStamp.disabled = true;
     hideStampWarning();
-
-    // Show spinner
     stampSpinner.classList.remove('hidden');
     btnStampText.textContent = 'Wird verarbeitet...';
 
@@ -260,25 +314,21 @@ btnStamp.addEventListener('click', async () => {
             body: JSON.stringify({ source: 'web' }),
         });
 
-        // Hide spinner
         stampSpinner.classList.add('hidden');
 
         if (!result.success) {
-            // Kernzeit-Blockierung: zeige Warnung, kein Stempel
             showStampWarning(result.warning || 'Stempeln fehlgeschlagen');
             btnStamp.disabled = false;
             btnStampText.textContent = isStampedIn ? 'Ausstempeln' : 'Einstempeln';
             return;
         }
 
-        // Kernzeitwarnung (nicht blockierend)
         if (result.warning) {
             showStampWarning(result.warning);
         }
 
         isStampedIn = result.type === 'in';
 
-        // Fetch fresh today data for stamps list + last stamp
         const fresh = await apiFetch('/stamp/today');
         const freshLast = fresh.stamps && fresh.stamps.length ? fresh.stamps[fresh.stamps.length - 1] : null;
         updateStampUI(fresh.todayMinutes, fresh.balance, freshLast);
@@ -302,7 +352,7 @@ btnStamp.addEventListener('click', async () => {
     }
 });
 
-
+// ── History ─────────────────────────────────────────────────
 async function loadHistory() {
     const from = historyFrom.value;
     const to = historyTo.value;
@@ -363,6 +413,7 @@ function renderHistory(stamps) {
     }
 }
 
+// ── Users (Admin) ───────────────────────────────────────────
 async function loadUsers() {
     try {
         allUsers = await apiFetch('/admin/users');
@@ -374,7 +425,7 @@ async function loadUsers() {
 
 function renderUsersTable() {
     const roleLabels = { admin: 'Admin', vorgesetzter: 'Vorgesetzter', arbeiter: 'Mitarbeiter' };
-    const uid = currentUser.id || currentUser.id;
+    const uid = currentUser.id;
     usersTbody.innerHTML = allUsers
         .map(
             (u) => `
@@ -512,6 +563,7 @@ formCreateUser.addEventListener('submit', async (e) => {
     }
 });
 
+// ── Edit User Modal ─────────────────────────────────────────
 const editModal = document.getElementById('modal-edit-user');
 const formEditUser = document.getElementById('form-edit-user');
 const editError = document.getElementById('edit-user-error');
@@ -678,6 +730,7 @@ window._reactivateUser = async function (id, name) {
     }
 };
 
+// ── Vacation ────────────────────────────────────────────────
 async function loadVacation() {
     try {
         const data = await apiFetch('/admin/vacation/balance');
@@ -692,6 +745,7 @@ async function loadVacation() {
     } catch (err) { console.error(err); }
 }
 
+// ── Groups Page ─────────────────────────────────────────────
 async function loadGroupsPage() {
     try {
         allGroups = await apiFetch('/admin/groups');
@@ -738,6 +792,7 @@ window._deleteGroup = async function (id, name, memberCount) {
     } catch (err) { alert('Fehler: ' + err.message); }
 };
 
+// ── Team Page ───────────────────────────────────────────────
 async function loadTeamPage() {
     const tbody = document.getElementById('team-tbody');
     tbody.innerHTML = '<tr><td colspan="3" class="text-muted">Lade Daten…</td></tr>';
@@ -783,15 +838,7 @@ function renderTeamTable(members) {
 
 document.getElementById('btn-refresh-team')?.addEventListener('click', loadTeamPage);
 
-function esc(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
-
-// ── Meine Anträge ─────────────────────────────────────────
-
+// ── Meine Anträge ───────────────────────────────────────────
 const requestModal = document.getElementById('modal-new-request');
 const btnNewRequest = document.getElementById('btn-new-request');
 const btnCloseRequestModal = document.getElementById('btn-close-request-modal');
