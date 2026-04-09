@@ -35,8 +35,15 @@ const cuSupervisor = document.getElementById('cu-supervisor');
 const cuEmailHint = document.getElementById('cu-email-hint');
 
 const btnStamp = document.getElementById('btn-stamp');
+const btnStampText = document.getElementById('btn-stamp-text');
+const stampSpinner = document.getElementById('stamp-spinner');
 const stampIndicator = document.getElementById('stamp-indicator');
 const stampStatusText = document.getElementById('stamp-status-text');
+const stampLastTime = document.getElementById('stamp-last-time');
+const stampLastLabel = document.getElementById('stamp-last-label');
+const stampLastClock = document.getElementById('stamp-last-clock');
+const stampWarning = document.getElementById('stamp-warning');
+const stampWarningText = document.getElementById('stamp-warning-text');
 const todayMinutesEl = document.getElementById('today-minutes');
 const monthBalanceEl = document.getElementById('month-balance');
 const todayStampsList = document.getElementById('today-stamps-list');
@@ -161,7 +168,8 @@ async function loadDashboard() {
     try {
         const data = await apiFetch('/stamp/today');
         isStampedIn = data.isStampedIn;
-        updateStampUI(data.todayMinutes, data.balance);
+        const lastStamp = data.stamps && data.stamps.length ? data.stamps[data.stamps.length - 1] : null;
+        updateStampUI(data.todayMinutes, data.balance, lastStamp);
         renderTodayStamps(data.stamps);
 
         const now = new Date();
@@ -170,13 +178,15 @@ async function loadDashboard() {
         historyTo.value = now.toISOString().split('T')[0];
         loadHistory();
         loadVacation();
+        loadMyRequests();
 
         clearInterval(todayTimer);
         if (isStampedIn) {
             todayTimer = setInterval(async () => {
                 try {
                     const fresh = await apiFetch('/stamp/today');
-                    updateStampUI(fresh.todayMinutes, fresh.balance);
+                    const freshLast = fresh.stamps && fresh.stamps.length ? fresh.stamps[fresh.stamps.length - 1] : null;
+                    updateStampUI(fresh.todayMinutes, fresh.balance, freshLast);
                 } catch {}
             }, 30000);
         }
@@ -185,53 +195,93 @@ async function loadDashboard() {
     }
 }
 
-function updateStampUI(todayMins, balance) {
+function updateStampUI(todayMins, balance, lastStamp) {
     stampIndicator.className = `stamp-indicator ${isStampedIn ? 'in' : 'out'}`;
     stampStatusText.textContent = isStampedIn ? 'Eingestempelt' : 'Ausgestempelt';
     btnStamp.disabled = false;
-    btnStamp.textContent = isStampedIn ? 'Ausstempeln' : 'Einstempeln';
+    btnStampText.textContent = isStampedIn ? 'Ausstempeln' : 'Einstempeln';
     btnStamp.className = `btn btn-stamp ${isStampedIn ? 'stamp-out' : 'stamp-in'}`;
     todayMinutesEl.textContent = formatMinutes(todayMins);
     monthBalanceEl.textContent = formatMinutes(balance);
     monthBalanceEl.className = `stamp-info-value ${balance >= 0 ? 'positive' : 'negative'}`;
+
+    // Last stamp time display
+    if (lastStamp) {
+        const time = formatTime(lastStamp.stamp_time);
+        stampLastLabel.textContent = lastStamp.type === 'in' ? 'Eingestempelt um' : 'Ausgestempelt um';
+        stampLastClock.textContent = time;
+        stampLastTime.classList.remove('hidden');
+    } else {
+        stampLastTime.classList.add('hidden');
+    }
 }
+
+function showStampWarning(text) {
+    stampWarningText.textContent = text;
+    stampWarning.classList.remove('hidden');
+    // Re-trigger animation
+    stampWarning.style.animation = 'none';
+    stampWarning.offsetHeight; // reflow
+    stampWarning.style.animation = '';
+}
+
+function hideStampWarning() {
+    stampWarning.classList.add('hidden');
+}
+
 
 function renderTodayStamps(stamps) {
     if (!stamps || stamps.length === 0) {
         todayStampsList.innerHTML = '<p class="text-muted">Heute noch keine Stempelzeiten.</p>';
         return;
     }
+    const sourceLabel = { web: 'Web', arduino: 'NFC', app: 'App' };
     todayStampsList.innerHTML = stamps.map(s => `
         <div class="stamp-entry">
             <div class="stamp-entry-icon ${s.type}"></div>
             <span class="stamp-entry-time">${formatTime(s.stamp_time)}</span>
             <span class="stamp-entry-label">${s.type === 'in' ? 'Einstempeln' : 'Ausstempeln'}</span>
+            <span class="stamp-entry-source">${sourceLabel[s.source] || s.source || ''}</span>
         </div>
     `).join('');
 }
 
 btnStamp.addEventListener('click', async () => {
     btnStamp.disabled = true;
+    hideStampWarning();
+
+    // Show spinner
+    stampSpinner.classList.remove('hidden');
+    btnStampText.textContent = 'Wird verarbeitet...';
+
     try {
         const result = await apiFetch('/stamp', {
             method: 'POST',
             body: JSON.stringify({ source: 'web' }),
         });
 
+        // Hide spinner
+        stampSpinner.classList.add('hidden');
+
         if (!result.success) {
-            alert(result.warning || 'Stempeln fehlgeschlagen');
+            // Kernzeit-Blockierung: zeige Warnung, kein Stempel
+            showStampWarning(result.warning || 'Stempeln fehlgeschlagen');
             btnStamp.disabled = false;
+            btnStampText.textContent = isStampedIn ? 'Ausstempeln' : 'Einstempeln';
             return;
         }
 
+        // Kernzeitwarnung (nicht blockierend)
         if (result.warning) {
-            alert(result.warning);
+            showStampWarning(result.warning);
         }
 
         isStampedIn = result.type === 'in';
-        updateStampUI(result.todayMinutes, result.balance);
 
+        // Fetch fresh today data for stamps list + last stamp
         const fresh = await apiFetch('/stamp/today');
+        const freshLast = fresh.stamps && fresh.stamps.length ? fresh.stamps[fresh.stamps.length - 1] : null;
+        updateStampUI(fresh.todayMinutes, fresh.balance, freshLast);
         renderTodayStamps(fresh.stamps);
 
         clearInterval(todayTimer);
@@ -239,15 +289,19 @@ btnStamp.addEventListener('click', async () => {
             todayTimer = setInterval(async () => {
                 try {
                     const f = await apiFetch('/stamp/today');
-                    updateStampUI(f.todayMinutes, f.balance);
+                    const fLast = f.stamps && f.stamps.length ? f.stamps[f.stamps.length - 1] : null;
+                    updateStampUI(f.todayMinutes, f.balance, fLast);
                 } catch {}
             }, 30000);
         }
     } catch (err) {
-        alert('Fehler: ' + err.message);
+        stampSpinner.classList.add('hidden');
+        showStampWarning('Fehler: ' + err.message);
         btnStamp.disabled = false;
+        btnStampText.textContent = isStampedIn ? 'Ausstempeln' : 'Einstempeln';
     }
 });
+
 
 async function loadHistory() {
     const from = historyFrom.value;
@@ -735,3 +789,138 @@ function esc(str) {
     div.textContent = str;
     return div.innerHTML;
 }
+
+// ── Meine Anträge ─────────────────────────────────────────
+
+const requestModal = document.getElementById('modal-new-request');
+const btnNewRequest = document.getElementById('btn-new-request');
+const btnCloseRequestModal = document.getElementById('btn-close-request-modal');
+const btnCancelRequestModal = document.getElementById('btn-cancel-request-modal');
+const btnSubmitRequest = document.getElementById('btn-submit-request');
+const newRequestError = document.getElementById('new-request-error');
+const newRequestSuccess = document.getElementById('new-request-success');
+const requestsTbody = document.getElementById('requests-tbody');
+const requestsTable = document.getElementById('requests-table');
+const requestsEmpty = document.getElementById('requests-empty');
+
+const typeLabels = {
+    urlaub: 'Urlaub',
+    gleitzeit: 'Gleitzeit',
+    homeoffice: 'Homeoffice',
+    krank: 'Krank',
+};
+
+const statusLabels = {
+    pending: 'Ausstehend',
+    approved: 'Genehmigt',
+    denied: 'Abgelehnt',
+};
+
+function openRequestModal() {
+    newRequestError.classList.add('hidden');
+    newRequestSuccess.classList.add('hidden');
+    document.getElementById('req-type').value = 'urlaub';
+    document.getElementById('req-from').value = '';
+    document.getElementById('req-to').value = '';
+    document.getElementById('req-note').value = '';
+    requestModal.classList.remove('hidden');
+}
+
+function closeRequestModal() {
+    requestModal.classList.add('hidden');
+}
+
+btnNewRequest.addEventListener('click', openRequestModal);
+btnCloseRequestModal.addEventListener('click', closeRequestModal);
+btnCancelRequestModal.addEventListener('click', closeRequestModal);
+document.querySelector('.modal-backdrop-request')?.addEventListener('click', closeRequestModal);
+
+btnSubmitRequest.addEventListener('click', async () => {
+    newRequestError.classList.add('hidden');
+    newRequestSuccess.classList.add('hidden');
+
+    const type = document.getElementById('req-type').value;
+    const dateFrom = document.getElementById('req-from').value;
+    const dateTo = document.getElementById('req-to').value;
+    const note = document.getElementById('req-note').value.trim();
+
+    if (!dateFrom || !dateTo) {
+        newRequestError.textContent = 'Bitte Start- und Enddatum angeben.';
+        newRequestError.classList.remove('hidden');
+        return;
+    }
+
+    btnSubmitRequest.disabled = true;
+    btnSubmitRequest.textContent = 'Wird gesendet...';
+
+    try {
+        await apiFetch('/requests', {
+            method: 'POST',
+            body: JSON.stringify({ type, dateFrom, dateTo, note: note || undefined }),
+        });
+        newRequestSuccess.textContent = 'Antrag erfolgreich eingereicht!';
+        newRequestSuccess.classList.remove('hidden');
+        await loadMyRequests();
+        setTimeout(() => {
+            closeRequestModal();
+            newRequestSuccess.classList.add('hidden');
+        }, 1200);
+    } catch (err) {
+        newRequestError.textContent = err.message;
+        newRequestError.classList.remove('hidden');
+    } finally {
+        btnSubmitRequest.disabled = false;
+        btnSubmitRequest.textContent = 'Antrag stellen';
+    }
+});
+
+async function loadMyRequests() {
+    try {
+        const requests = await apiFetch('/requests/my');
+        renderMyRequests(requests);
+    } catch (err) {
+        console.error('Fehler beim Laden der Anträge:', err);
+    }
+}
+
+function renderMyRequests(requests) {
+    if (!requests || requests.length === 0) {
+        requestsTable.classList.add('hidden');
+        requestsEmpty.classList.remove('hidden');
+        return;
+    }
+    requestsTable.classList.remove('hidden');
+    requestsEmpty.classList.add('hidden');
+
+    requestsTbody.innerHTML = requests.map(r => {
+        const statusClass = `badge-${r.status}`;
+        const statusLabel = statusLabels[r.status] || r.status;
+        const fromDate = formatDate(r.date_from);
+        const toDate = formatDate(r.date_to);
+        const zeitraum = fromDate === toDate ? fromDate : `${fromDate} – ${toDate}`;
+        const bearbeiter = r.reviewer_name ? esc(r.reviewer_name) : '–';
+        const withdrawBtn = r.status === 'pending'
+            ? `<button class="btn btn-sm btn-withdraw" onclick="window._withdrawRequest(${r.id})">Zurückziehen</button>`
+            : '';
+        return `
+            <tr>
+                <td>${esc(typeLabels[r.type] || r.type)}</td>
+                <td>${zeitraum}</td>
+                <td><span class="badge ${statusClass}">${statusLabel}</span></td>
+                <td>${bearbeiter}</td>
+                <td>${withdrawBtn}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+window._withdrawRequest = async function(id) {
+    if (!confirm('Möchten Sie diesen Antrag wirklich zurückziehen?')) return;
+    try {
+        await apiFetch(`/requests/${id}`, { method: 'DELETE' });
+        await loadMyRequests();
+        await loadVacation();
+    } catch (err) {
+        alert('Fehler: ' + err.message);
+    }
+};

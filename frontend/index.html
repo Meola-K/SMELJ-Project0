@@ -45,7 +45,20 @@
                         <div class="stamp-indicator" id="stamp-indicator"></div>
                         <span id="stamp-status-text">Lädt...</span>
                     </div>
-                    <button id="btn-stamp" class="btn btn-stamp" disabled>Stempeln</button>
+                    <div class="stamp-last-time hidden" id="stamp-last-time">
+                        <span class="stamp-last-label" id="stamp-last-label"></span>
+                        <span class="stamp-last-clock" id="stamp-last-clock"></span>
+                    </div>
+                    <button id="btn-stamp" class="btn btn-stamp" disabled>
+                        <span class="btn-stamp-inner">
+                            <span class="stamp-spinner hidden" id="stamp-spinner"></span>
+                            <span id="btn-stamp-text">Stempeln</span>
+                        </span>
+                    </button>
+                    <div class="stamp-warning hidden" id="stamp-warning">
+                        <span class="stamp-warning-icon">⚠</span>
+                        <span id="stamp-warning-text"></span>
+                    </div>
                     <div class="stamp-info">
                         <div class="stamp-info-item">
                             <span class="stamp-info-label">Heute gearbeitet</span>
@@ -86,6 +99,66 @@
                     <div class="vacation-bar" id="vacation-bar"></div>
                 </div>
                 <p class="text-muted text-sm" id="vacation-pending-text"></p>
+            </div>
+
+            <div class="card requests-card">
+                <div class="requests-header">
+                    <h3>Meine Anträge</h3>
+                    <button class="btn btn-sm btn-primary" id="btn-new-request">+ Neuer Antrag</button>
+                </div>
+                <div id="requests-empty" class="text-muted hidden">Keine Anträge vorhanden.</div>
+                <table class="table" id="requests-table">
+                    <thead>
+                        <tr>
+                            <th>Typ</th>
+                            <th>Zeitraum</th>
+                            <th>Status</th>
+                            <th>Bearbeiter</th>
+                            <th>Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="requests-tbody"></tbody>
+                </table>
+            </div>
+
+            <!-- Modal: Neuer Antrag -->
+            <div id="modal-new-request" class="modal hidden">
+                <div class="modal-backdrop modal-backdrop-request"></div>
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Neuen Antrag stellen</h2>
+                        <button class="modal-close" id="btn-close-request-modal">&times;</button>
+                    </div>
+                    <div id="new-request-error" class="alert alert-error hidden"></div>
+                    <div id="new-request-success" class="alert alert-success hidden"></div>
+                    <div class="form-group">
+                        <label for="req-type">Antragstyp *</label>
+                        <select id="req-type">
+                            <option value="urlaub">Urlaub</option>
+                            <option value="gleitzeit">Gleitzeit</option>
+                            <option value="homeoffice">Homeoffice</option>
+                            <option value="krank">Krank</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="req-from">Von *</label>
+                            <input type="date" id="req-from" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="req-to">Bis *</label>
+                            <input type="date" id="req-to" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="req-note">Notiz</label>
+                        <input type="text" id="req-note" placeholder="Optional">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn" id="btn-cancel-request-modal">Abbrechen</button>
+                        <button type="button" class="btn btn-primary" id="btn-submit-request">Antrag stellen</button>
+                    </div>
+                </div>
             </div>
 
             <div class="card history-card">

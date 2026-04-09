@@ -245,19 +245,43 @@ body {
 }
 
 .stamp-indicator {
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
     background: var(--text-muted);
+    transition: background 0.3s;
 }
 
 .stamp-indicator.in {
     background: var(--success);
-    box-shadow: 0 0 6px rgba(22, 163, 74, 0.4);
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5);
+    animation: stamp-pulse 2s infinite;
 }
 
 .stamp-indicator.out {
     background: var(--text-muted);
+    animation: none;
+}
+
+@keyframes stamp-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5); }
+    70%  { box-shadow: 0 0 0 8px rgba(22, 163, 74, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+}
+
+.stamp-last-time {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-top: -0.5rem;
+}
+
+.stamp-last-clock {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
 }
 
 .btn-stamp {
@@ -267,7 +291,34 @@ body {
     border-radius: var(--radius);
     border: none;
     cursor: pointer;
-    transition: background 0.15s, transform 0.1s;
+    transition: background 0.15s, transform 0.1s, opacity 0.15s;
+    min-width: 180px;
+}
+
+.btn-stamp-inner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.stamp-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.btn-stamp:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
 }
 
 .btn-stamp:active:not(:disabled) {
@@ -279,14 +330,41 @@ body {
     color: white;
 }
 
-.btn-stamp.stamp-in:hover { background: var(--primary-hover); }
+.btn-stamp.stamp-in:hover:not(:disabled) { background: var(--primary-hover); }
 
 .btn-stamp.stamp-out {
     background: var(--danger);
     color: white;
 }
 
-.btn-stamp.stamp-out:hover { background: #b91c1c; }
+.btn-stamp.stamp-out:hover:not(:disabled) { background: #b91c1c; }
+
+.stamp-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    background: #fef9c3;
+    color: #854d0e;
+    border: 1px solid #fde68a;
+    border-radius: var(--radius);
+    padding: 0.55rem 0.85rem;
+    font-size: 0.82rem;
+    font-weight: 500;
+    max-width: 280px;
+    text-align: left;
+    animation: fadeInDown 0.25s ease;
+}
+
+.stamp-warning-icon {
+    flex-shrink: 0;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+@keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
 
 .stamp-info {
     display: flex;
@@ -348,6 +426,17 @@ body {
 
 .stamp-entry-label {
     color: var(--text-muted);
+    flex: 1;
+}
+
+.stamp-entry-source {
+    font-size: 0.72rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1rem 0.35rem;
+    color: var(--text-muted);
+    margin-left: auto;
 }
 
 .text-muted { color: var(--text-muted); }
@@ -547,3 +636,15 @@ body {
     .team-stats { flex-direction: column; }
 }
 
+
+/* ── Meine Anträge ───────────────────────────────────── */
+.requests-card { margin-bottom: 1.5rem; }
+.requests-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+.requests-header h3 { margin: 0; }
+
+.badge-pending  { background: #fef9c3; color: #854d0e; }
+.badge-approved { background: #dcfce7; color: #166534; }
+.badge-denied   { background: #fee2e2; color: #991b1b; }
+
+.btn-withdraw { background: #fee2e2; color: #991b1b; border: none; }
+.btn-withdraw:hover { background: #fecaca; }
