@@ -136,6 +136,11 @@ registerRoute('admin', {
     onEnter: () => { loadUsers(); loadGroups(); },
 });
 
+registerRoute('requests-overview', {
+    pageId: 'page-requests-overview',
+    onEnter: loadRequestsOverview,
+});
+
 // ── Login ───────────────────────────────────────────────────
 btnLogin.addEventListener('click', async () => {
     loginError.classList.add('hidden');
@@ -222,32 +227,8 @@ function esc(str) {
     return div.innerHTML;
 }
 
-// ── Admin KPI Stats ─────────────────────────────────────────
-async function loadAdminStats() {
-    const statsEl = document.getElementById('admin-stats');
-    if (!currentUser || currentUser.role !== 'admin') {
-        statsEl.classList.add('hidden');
-        return;
-    }
-
-    statsEl.classList.remove('hidden');
-
-    try {
-        const stats = await apiFetch('/admin/stats');
-        document.getElementById('stat-total-users').textContent = stats.totalUsers;
-        document.getElementById('stat-stamped-in').textContent = stats.stampedIn;
-        document.getElementById('stat-pending-requests').textContent = stats.pendingRequests;
-        document.getElementById('stat-active-devices').textContent = stats.activeDevices;
-    } catch (err) {
-        console.error('Admin-Stats Fehler:', err);
-    }
-}
-
 // ── Dashboard ───────────────────────────────────────────────
 async function loadDashboard() {
-    // Admin KPI Stats laden (nur für Admin-Rolle)
-    loadAdminStats();
-
     try {
         const data = await apiFetch('/stamp/today');
         isStampedIn = data.isStampedIn;
@@ -262,7 +243,6 @@ async function loadDashboard() {
         loadHistory();
         loadVacation();
         loadMyRequests();
-        loadWorkRules();
 
         clearInterval(todayTimer);
         if (isStampedIn) {
@@ -463,7 +443,6 @@ function renderUsersTable() {
             <td><span class="badge ${u.active ? 'badge-active' : 'badge-inactive'}">${u.active ? 'Aktiv' : 'Inaktiv'}</span></td>
             <td class="actions-cell">
                 <button class="btn btn-sm" onclick="window._editUser(${u.id})">Bearbeiten</button>
-                <button class="btn btn-sm btn-rules" onclick="window._editWorkRules(${u.id}, '${esc(u.first_name)} ${esc(u.last_name)}')">Regeln</button>
                 ${u.id !== uid ? (u.active
                     ? `<button class="btn btn-sm btn-danger" onclick="window._deactivateUser(${u.id}, '${esc(u.first_name)} ${esc(u.last_name)}')">Deaktivieren</button>`
                     : `<button class="btn btn-sm btn-success" onclick="window._reactivateUser(${u.id}, '${esc(u.first_name)} ${esc(u.last_name)}')">Aktivieren</button>`
@@ -998,181 +977,150 @@ window._withdrawRequest = async function(id) {
     }
 };
 
-// ── Arbeitsregeln (Dashboard, Nur-Lesen) ────────────────────
-const dayNames = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+// ── Antragsverwaltung (Vorgesetzter / Admin) ─────────────────
 
-function formatTimeShort(timeStr) {
-    if (!timeStr) return '–';
-    return timeStr.substring(0, 5); // "09:00:00" → "09:00"
+let allRequestsData = [];   // cache für client-seitiges Filtern
+let pendingRequestsData = [];
+
+// Tab-Switching
+document.querySelectorAll('.req-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.req-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const target = tab.dataset.tab;
+        document.getElementById('req-panel-pending').classList.toggle('hidden', target !== 'pending');
+        document.getElementById('req-panel-all').classList.toggle('hidden', target !== 'all');
+    });
+});
+
+// Filter
+document.getElementById('filter-status')?.addEventListener('change', applyAllFilter);
+document.getElementById('filter-type')?.addEventListener('change', applyAllFilter);
+document.getElementById('btn-reset-filter')?.addEventListener('click', () => {
+    document.getElementById('filter-status').value = '';
+    document.getElementById('filter-type').value = '';
+    applyAllFilter();
+});
+
+async function loadRequestsOverview() {
+    await Promise.all([loadPendingRequests(), loadAllRequests()]);
 }
 
-function formatMinutesAsHours(mins) {
-    if (mins == null) return '–';
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    return m > 0 ? `${h}h ${m}min` : `${h}h`;
-}
-
-async function loadWorkRules() {
-    const loadingEl = document.getElementById('work-rules-loading');
-    const tableEl = document.getElementById('work-rules-table');
-    const tbody = document.getElementById('work-rules-tbody');
-    const limitsEl = document.getElementById('work-rules-limits');
-
-    if (!currentUser) return;
-
+async function loadPendingRequests() {
     try {
-        const data = await apiFetch(`/admin/work-rules/${currentUser.id}`);
-        const rules = data.rules || [];
-        const limits = data.limits;
-
-        loadingEl.style.display = 'none';
-        tableEl.style.display = '';
-
-        tbody.innerHTML = rules.map(r => {
-            const allowed = r.work_allowed ? '<span class="badge badge-allowed">Ja</span>' : '<span class="badge badge-blocked">Nein</span>';
-            const kernzeit = r.work_allowed && r.core_start && r.core_end
-                ? `${formatTimeShort(r.core_start)} – ${formatTimeShort(r.core_end)}`
-                : '–';
-            const maxH = r.work_allowed ? formatMinutesAsHours(r.max_daily_minutes) : '–';
-            return `
-                <tr>
-                    <td>${dayNames[r.weekday] || r.weekday}</td>
-                    <td>${kernzeit}</td>
-                    <td>${maxH}</td>
-                    <td>${allowed}</td>
-                </tr>`;
-        }).join('');
-
-        if (limits) {
-            limitsEl.classList.remove('hidden');
-            limitsEl.innerHTML = `
-                <div class="work-rules-limit-item">
-                    <span class="work-rules-limit-value">${formatMinutesAsHours(limits.max_weekly_minutes)}</span>
-                    <span class="work-rules-limit-label">Max. pro Woche</span>
-                </div>
-                <div class="work-rules-limit-item">
-                    <span class="work-rules-limit-value">${formatMinutesAsHours(limits.max_overtime_minutes)}</span>
-                    <span class="work-rules-limit-label">Max. Überstunden</span>
-                </div>
-                <div class="work-rules-limit-item">
-                    <span class="work-rules-limit-value">${formatMinutesAsHours(limits.max_undertime_minutes)}</span>
-                    <span class="work-rules-limit-label">Max. Minusstunden</span>
-                </div>`;
-        } else {
-            limitsEl.classList.add('hidden');
-        }
+        pendingRequestsData = await apiFetch('/requests/pending');
+        renderPendingRequests(pendingRequestsData);
     } catch (err) {
-        loadingEl.textContent = 'Arbeitsregeln konnten nicht geladen werden.';
-        console.error(err);
+        console.error('Fehler beim Laden ausstehender Anträge:', err);
     }
 }
 
-// ── Arbeitsregeln bearbeiten (Admin-Modal) ──────────────────
-const workRulesModal = document.getElementById('modal-work-rules');
-const workRulesError = document.getElementById('workrules-error');
-const workRulesSuccess = document.getElementById('workrules-success');
-const workRulesUserLabel = document.getElementById('workrules-user-label');
-const workRulesEditTbody = document.getElementById('workrules-edit-tbody');
-const btnCloseWorkRules = document.getElementById('btn-close-workrules-modal');
-const btnCancelWorkRules = document.getElementById('btn-cancel-workrules-modal');
-const btnSaveWorkRules = document.getElementById('btn-save-workrules');
-
-let editingWorkRulesUserId = null;
-
-function closeWorkRulesModal() {
-    workRulesModal.classList.add('hidden');
-    editingWorkRulesUserId = null;
+async function loadAllRequests() {
+    try {
+        allRequestsData = await apiFetch('/requests/all');
+        applyAllFilter();
+    } catch (err) {
+        console.error('Fehler beim Laden aller Anträge:', err);
+    }
 }
 
-btnCloseWorkRules.addEventListener('click', closeWorkRulesModal);
-btnCancelWorkRules.addEventListener('click', closeWorkRulesModal);
-document.querySelector('.modal-backdrop-workrules')?.addEventListener('click', closeWorkRulesModal);
+function renderPendingRequests(requests) {
+    const tbody = document.getElementById('pending-tbody');
+    const emptyEl = document.getElementById('pending-empty');
+    const table = document.getElementById('pending-table');
+    const badge = document.getElementById('pending-count-badge');
 
-window._editWorkRules = async function(userId, userName) {
-    workRulesError.classList.add('hidden');
-    workRulesSuccess.classList.add('hidden');
-    workRulesUserLabel.textContent = `Regeln für: ${userName}`;
-    editingWorkRulesUserId = userId;
+    // Badge aktualisieren
+    if (requests.length > 0) {
+        badge.textContent = requests.length;
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+    }
 
+    if (requests.length === 0) {
+        table.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        return;
+    }
+    table.classList.remove('hidden');
+    emptyEl.classList.add('hidden');
+
+    tbody.innerHTML = requests.map(r => {
+        const from = formatDate(r.date_from);
+        const to = formatDate(r.date_to);
+        const zeitraum = from === to ? from : `${from} – ${to}`;
+        return `
+            <tr>
+                <td><strong>${esc(r.user_name)}</strong></td>
+                <td>${esc(typeLabels[r.type] || r.type)}</td>
+                <td>${zeitraum}</td>
+                <td>${r.note ? esc(r.note) : '<span class="text-muted">–</span>'}</td>
+                <td class="actions-cell">
+                    <button class="btn btn-sm btn-approve" onclick="window._reviewRequest(${r.id}, 'approved')">Genehmigen</button>
+                    <button class="btn btn-sm btn-deny" onclick="window._reviewRequest(${r.id}, 'denied')">Ablehnen</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function applyAllFilter() {
+    const statusVal = document.getElementById('filter-status')?.value || '';
+    const typeVal   = document.getElementById('filter-type')?.value   || '';
+
+    let filtered = allRequestsData;
+    if (statusVal) filtered = filtered.filter(r => r.status === statusVal);
+    if (typeVal)   filtered = filtered.filter(r => r.type === typeVal);
+
+    renderAllRequests(filtered);
+}
+
+function renderAllRequests(requests) {
+    const tbody  = document.getElementById('all-requests-tbody');
+    const emptyEl = document.getElementById('all-empty');
+    const table  = document.getElementById('all-requests-table');
+
+    if (requests.length === 0) {
+        table.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        return;
+    }
+    table.classList.remove('hidden');
+    emptyEl.classList.add('hidden');
+
+    tbody.innerHTML = requests.map(r => {
+        const from = formatDate(r.date_from);
+        const to   = formatDate(r.date_to);
+        const zeitraum = from === to ? from : `${from} – ${to}`;
+        const statusClass = `badge-${r.status}`;
+        const statusLabel = statusLabels[r.status] || r.status;
+        const bearbeiter  = r.reviewer_name ? esc(r.reviewer_name) : '<span class="text-muted">–</span>';
+        const eingereicht = r.created_at ? formatDate(r.created_at) : '–';
+        return `
+            <tr>
+                <td>${esc(r.user_name)}</td>
+                <td>${esc(typeLabels[r.type] || r.type)}</td>
+                <td>${zeitraum}</td>
+                <td><span class="badge ${statusClass}">${statusLabel}</span></td>
+                <td>${bearbeiter}</td>
+                <td>${eingereicht}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+window._reviewRequest = async function(id, status) {
+    const label = status === 'approved' ? 'genehmigen' : 'ablehnen';
+    if (!confirm(`Antrag wirklich ${label}?`)) return;
     try {
-        const data = await apiFetch(`/admin/work-rules/${userId}`);
-        const rules = data.rules || [];
-        const limits = data.limits || {};
-
-        // Tagesregeln ins Formular
-        workRulesEditTbody.innerHTML = dayNames.map((name, i) => {
-            const rule = rules.find(r => r.weekday === i) || { core_start: null, core_end: null, max_daily_minutes: 480, work_allowed: 0 };
-            const coreStart = rule.core_start ? formatTimeShort(rule.core_start) : '';
-            const coreEnd = rule.core_end ? formatTimeShort(rule.core_end) : '';
-            return `
-                <tr>
-                    <td>${name}</td>
-                    <td><input type="time" data-day="${i}" data-field="coreStart" value="${coreStart}"></td>
-                    <td><input type="time" data-day="${i}" data-field="coreEnd" value="${coreEnd}"></td>
-                    <td><input type="number" data-day="${i}" data-field="maxDailyMinutes" value="${rule.max_daily_minutes}" min="0" step="30"></td>
-                    <td><input type="checkbox" data-day="${i}" data-field="workAllowed" ${rule.work_allowed ? 'checked' : ''}></td>
-                </tr>`;
-        }).join('');
-
-        // Limits
-        document.getElementById('wr-max-weekly').value = limits.max_weekly_minutes ?? 2400;
-        document.getElementById('wr-max-overtime').value = limits.max_overtime_minutes ?? 720;
-        document.getElementById('wr-max-undertime').value = limits.max_undertime_minutes ?? 240;
-
-        workRulesModal.classList.remove('hidden');
+        await apiFetch(`/requests/${id}/review`, {
+            method: 'PUT',
+            body: JSON.stringify({ status }),
+        });
+        // Beide Listen neu laden
+        await loadRequestsOverview();
     } catch (err) {
-        alert('Fehler beim Laden der Arbeitsregeln: ' + err.message);
+        alert('Fehler: ' + err.message);
     }
 };
-
-btnSaveWorkRules.addEventListener('click', async () => {
-    if (!editingWorkRulesUserId) return;
-
-    workRulesError.classList.add('hidden');
-    workRulesSuccess.classList.add('hidden');
-
-    // Tagesregeln aus Formular lesen
-    const rules = [];
-    for (let i = 0; i < 7; i++) {
-        const row = workRulesEditTbody.querySelector(`input[data-day="${i}"][data-field="coreStart"]`);
-        if (!row) continue;
-
-        const coreStart = workRulesEditTbody.querySelector(`input[data-day="${i}"][data-field="coreStart"]`).value || null;
-        const coreEnd = workRulesEditTbody.querySelector(`input[data-day="${i}"][data-field="coreEnd"]`).value || null;
-        const maxDailyMinutes = parseInt(workRulesEditTbody.querySelector(`input[data-day="${i}"][data-field="maxDailyMinutes"]`).value) || 0;
-        const workAllowed = workRulesEditTbody.querySelector(`input[data-day="${i}"][data-field="workAllowed"]`).checked;
-
-        rules.push({ weekday: i, coreStart, coreEnd, maxDailyMinutes, workAllowed });
-    }
-
-    const limits = {
-        maxWeeklyMinutes: parseInt(document.getElementById('wr-max-weekly').value) || 2400,
-        maxOvertimeMinutes: parseInt(document.getElementById('wr-max-overtime').value) || 720,
-        maxUndertimeMinutes: parseInt(document.getElementById('wr-max-undertime').value) || 240,
-    };
-
-    btnSaveWorkRules.disabled = true;
-    btnSaveWorkRules.textContent = 'Speichere...';
-
-    try {
-        await apiFetch(`/admin/work-rules/${editingWorkRulesUserId}`, {
-            method: 'PUT',
-            body: JSON.stringify({ rules, limits }),
-        });
-
-        workRulesSuccess.textContent = 'Arbeitsregeln erfolgreich gespeichert!';
-        workRulesSuccess.classList.remove('hidden');
-
-        setTimeout(() => {
-            closeWorkRulesModal();
-            workRulesSuccess.classList.add('hidden');
-        }, 1200);
-    } catch (err) {
-        workRulesError.textContent = err.message;
-        workRulesError.classList.remove('hidden');
-    } finally {
-        btnSaveWorkRules.disabled = false;
-        btnSaveWorkRules.textContent = 'Speichern';
-    }
-});
