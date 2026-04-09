@@ -274,6 +274,24 @@
                             <tbody id="history-tbody"></tbody>
                         </table>
                     </div>
+
+                    <!-- Meine Arbeitsregeln -->
+                    <div class="card work-rules-card">
+                        <h3>Meine Arbeitsregeln</h3>
+                        <div id="work-rules-loading" class="text-muted">Lädt...</div>
+                        <table class="table" id="work-rules-table" style="display:none">
+                            <thead>
+                                <tr>
+                                    <th>Tag</th>
+                                    <th>Kernzeit</th>
+                                    <th>Max. Stunden</th>
+                                    <th>Erlaubt</th>
+                                </tr>
+                            </thead>
+                            <tbody id="work-rules-tbody"></tbody>
+                        </table>
+                        <div id="work-rules-limits" class="work-rules-limits hidden"></div>
+                    </div>
                 </div>
             </div>
 
@@ -485,6 +503,55 @@
                     <button type="submit" class="btn btn-primary" id="btn-submit-edit">Speichern</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Modal: Arbeitsregeln bearbeiten (Admin) -->
+    <div id="modal-work-rules" class="modal hidden">
+        <div class="modal-backdrop modal-backdrop-workrules"></div>
+        <div class="modal-content modal-content--wide">
+            <div class="modal-header">
+                <h2>Arbeitsregeln bearbeiten</h2>
+                <button class="modal-close" id="btn-close-workrules-modal">&times;</button>
+            </div>
+            <div id="workrules-error" class="alert alert-error hidden"></div>
+            <div id="workrules-success" class="alert alert-success hidden"></div>
+            <p class="text-muted text-sm" id="workrules-user-label" style="margin-bottom:1rem"></p>
+
+            <h4 style="font-size:0.9rem; margin-bottom:0.5rem">Tagesregeln</h4>
+            <table class="table" id="workrules-edit-table">
+                <thead>
+                    <tr>
+                        <th>Tag</th>
+                        <th>Kernzeit Start</th>
+                        <th>Kernzeit Ende</th>
+                        <th>Max. Min./Tag</th>
+                        <th>Erlaubt</th>
+                    </tr>
+                </thead>
+                <tbody id="workrules-edit-tbody"></tbody>
+            </table>
+
+            <h4 style="font-size:0.9rem; margin:1.25rem 0 0.5rem">Limits</h4>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="wr-max-weekly">Max. Woche (Min.)</label>
+                    <input type="number" id="wr-max-weekly" min="0" step="60">
+                </div>
+                <div class="form-group">
+                    <label for="wr-max-overtime">Max. Überstunden (Min.)</label>
+                    <input type="number" id="wr-max-overtime" min="0" step="60">
+                </div>
+                <div class="form-group">
+                    <label for="wr-max-undertime">Max. Minusstunden (Min.)</label>
+                    <input type="number" id="wr-max-undertime" min="0" step="60">
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn" id="btn-cancel-workrules-modal">Abbrechen</button>
+                <button type="button" class="btn btn-primary" id="btn-save-workrules">Speichern</button>
+            </div>
         </div>
     </div>
 

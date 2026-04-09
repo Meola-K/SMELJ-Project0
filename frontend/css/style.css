@@ -1017,3 +1017,75 @@ body {
         grid-template-columns: 1fr;
     }
 }
+
+/* ── Arbeitsregeln Card ─────────────────────────────── */
+
+.work-rules-card { margin-bottom: 1.5rem; }
+
+.work-rules-limits {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+
+.work-rules-limit-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.work-rules-limit-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.work-rules-limit-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.badge-allowed {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.badge-blocked {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+/* ── Work Rules Modal (wider) ───────────────────────── */
+
+.modal-content--wide {
+    max-width: 680px;
+}
+
+.modal-content--wide .table input[type="time"],
+.modal-content--wide .table input[type="number"] {
+    padding: 0.3rem 0.4rem;
+    font-size: 0.82rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    width: 100%;
+    min-width: 80px;
+}
+
+.modal-content--wide .table input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.btn-rules {
+    background: #e0e7ff;
+    color: #3730a3;
+    border: none;
+    font-size: 0.75rem;
+}
+
+.btn-rules:hover {
+    background: #c7d2fe;
+}

@@ -262,6 +262,7 @@ async function loadDashboard() {
         loadHistory();
         loadVacation();
         loadMyRequests();
+        loadWorkRules();
 
         clearInterval(todayTimer);
         if (isStampedIn) {
@@ -462,6 +463,7 @@ function renderUsersTable() {
             <td><span class="badge ${u.active ? 'badge-active' : 'badge-inactive'}">${u.active ? 'Aktiv' : 'Inaktiv'}</span></td>
             <td class="actions-cell">
                 <button class="btn btn-sm" onclick="window._editUser(${u.id})">Bearbeiten</button>
+                <button class="btn btn-sm btn-rules" onclick="window._editWorkRules(${u.id}, '${esc(u.first_name)} ${esc(u.last_name)}')">Regeln</button>
                 ${u.id !== uid ? (u.active
                     ? `<button class="btn btn-sm btn-danger" onclick="window._deactivateUser(${u.id}, '${esc(u.first_name)} ${esc(u.last_name)}')">Deaktivieren</button>`
                     : `<button class="btn btn-sm btn-success" onclick="window._reactivateUser(${u.id}, '${esc(u.first_name)} ${esc(u.last_name)}')">Aktivieren</button>`
@@ -995,3 +997,182 @@ window._withdrawRequest = async function(id) {
         alert('Fehler: ' + err.message);
     }
 };
+
+// ── Arbeitsregeln (Dashboard, Nur-Lesen) ────────────────────
+const dayNames = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+
+function formatTimeShort(timeStr) {
+    if (!timeStr) return '–';
+    return timeStr.substring(0, 5); // "09:00:00" → "09:00"
+}
+
+function formatMinutesAsHours(mins) {
+    if (mins == null) return '–';
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m > 0 ? `${h}h ${m}min` : `${h}h`;
+}
+
+async function loadWorkRules() {
+    const loadingEl = document.getElementById('work-rules-loading');
+    const tableEl = document.getElementById('work-rules-table');
+    const tbody = document.getElementById('work-rules-tbody');
+    const limitsEl = document.getElementById('work-rules-limits');
+
+    if (!currentUser) return;
+
+    try {
+        const data = await apiFetch(`/admin/work-rules/${currentUser.id}`);
+        const rules = data.rules || [];
+        const limits = data.limits;
+
+        loadingEl.style.display = 'none';
+        tableEl.style.display = '';
+
+        tbody.innerHTML = rules.map(r => {
+            const allowed = r.work_allowed ? '<span class="badge badge-allowed">Ja</span>' : '<span class="badge badge-blocked">Nein</span>';
+            const kernzeit = r.work_allowed && r.core_start && r.core_end
+                ? `${formatTimeShort(r.core_start)} – ${formatTimeShort(r.core_end)}`
+                : '–';
+            const maxH = r.work_allowed ? formatMinutesAsHours(r.max_daily_minutes) : '–';
+            return `
+                <tr>
+                    <td>${dayNames[r.weekday] || r.weekday}</td>
+                    <td>${kernzeit}</td>
+                    <td>${maxH}</td>
+                    <td>${allowed}</td>
+                </tr>`;
+        }).join('');
+
+        if (limits) {
+            limitsEl.classList.remove('hidden');
+            limitsEl.innerHTML = `
+                <div class="work-rules-limit-item">
+                    <span class="work-rules-limit-value">${formatMinutesAsHours(limits.max_weekly_minutes)}</span>
+                    <span class="work-rules-limit-label">Max. pro Woche</span>
+                </div>
+                <div class="work-rules-limit-item">
+                    <span class="work-rules-limit-value">${formatMinutesAsHours(limits.max_overtime_minutes)}</span>
+                    <span class="work-rules-limit-label">Max. Überstunden</span>
+                </div>
+                <div class="work-rules-limit-item">
+                    <span class="work-rules-limit-value">${formatMinutesAsHours(limits.max_undertime_minutes)}</span>
+                    <span class="work-rules-limit-label">Max. Minusstunden</span>
+                </div>`;
+        } else {
+            limitsEl.classList.add('hidden');
+        }
+    } catch (err) {
+        loadingEl.textContent = 'Arbeitsregeln konnten nicht geladen werden.';
+        console.error(err);
+    }
+}
+
+// ── Arbeitsregeln bearbeiten (Admin-Modal) ──────────────────
+const workRulesModal = document.getElementById('modal-work-rules');
+const workRulesError = document.getElementById('workrules-error');
+const workRulesSuccess = document.getElementById('workrules-success');
+const workRulesUserLabel = document.getElementById('workrules-user-label');
+const workRulesEditTbody = document.getElementById('workrules-edit-tbody');
+const btnCloseWorkRules = document.getElementById('btn-close-workrules-modal');
+const btnCancelWorkRules = document.getElementById('btn-cancel-workrules-modal');
+const btnSaveWorkRules = document.getElementById('btn-save-workrules');
+
+let editingWorkRulesUserId = null;
+
+function closeWorkRulesModal() {
+    workRulesModal.classList.add('hidden');
+    editingWorkRulesUserId = null;
+}
+
+btnCloseWorkRules.addEventListener('click', closeWorkRulesModal);
+btnCancelWorkRules.addEventListener('click', closeWorkRulesModal);
+document.querySelector('.modal-backdrop-workrules')?.addEventListener('click', closeWorkRulesModal);
+
+window._editWorkRules = async function(userId, userName) {
+    workRulesError.classList.add('hidden');
+    workRulesSuccess.classList.add('hidden');
+    workRulesUserLabel.textContent = `Regeln für: ${userName}`;
+    editingWorkRulesUserId = userId;
+
+    try {
+        const data = await apiFetch(`/admin/work-rules/${userId}`);
+        const rules = data.rules || [];
+        const limits = data.limits || {};
+
+        // Tagesregeln ins Formular
+        workRulesEditTbody.innerHTML = dayNames.map((name, i) => {
+            const rule = rules.find(r => r.weekday === i) || { core_start: null, core_end: null, max_daily_minutes: 480, work_allowed: 0 };
+            const coreStart = rule.core_start ? formatTimeShort(rule.core_start) : '';
+            const coreEnd = rule.core_end ? formatTimeShort(rule.core_end) : '';
+            return `
+                <tr>
+                    <td>${name}</td>
+                    <td><input type="time" data-day="${i}" data-field="coreStart" value="${coreStart}"></td>
+                    <td><input type="time" data-day="${i}" data-field="coreEnd" value="${coreEnd}"></td>
+                    <td><input type="number" data-day="${i}" data-field="maxDailyMinutes" value="${rule.max_daily_minutes}" min="0" step="30"></td>
+                    <td><input type="checkbox" data-day="${i}" data-field="workAllowed" ${rule.work_allowed ? 'checked' : ''}></td>
+                </tr>`;
+        }).join('');
+
+        // Limits
+        document.getElementById('wr-max-weekly').value = limits.max_weekly_minutes ?? 2400;
+        document.getElementById('wr-max-overtime').value = limits.max_overtime_minutes ?? 720;
+        document.getElementById('wr-max-undertime').value = limits.max_undertime_minutes ?? 240;
+
+        workRulesModal.classList.remove('hidden');
+    } catch (err) {
+        alert('Fehler beim Laden der Arbeitsregeln: ' + err.message);
+    }
+};
+
+btnSaveWorkRules.addEventListener('click', async () => {
+    if (!editingWorkRulesUserId) return;
+
+    workRulesError.classList.add('hidden');
+    workRulesSuccess.classList.add('hidden');
+
+    // Tagesregeln aus Formular lesen
+    const rules = [];
+    for (let i = 0; i < 7; i++) {
+        const row = workRulesEditTbody.querySelector(`input[data-day="${i}"][data-field="coreStart"]`);
+        if (!row) continue;
+
+        const coreStart = workRulesEditTbody.querySelector(`input[data-day="${i}"][data-field="coreStart"]`).value || null;
+        const coreEnd = workRulesEditTbody.querySelector(`input[data-day="${i}"][data-field="coreEnd"]`).value || null;
+        const maxDailyMinutes = parseInt(workRulesEditTbody.querySelector(`input[data-day="${i}"][data-field="maxDailyMinutes"]`).value) || 0;
+        const workAllowed = workRulesEditTbody.querySelector(`input[data-day="${i}"][data-field="workAllowed"]`).checked;
+
+        rules.push({ weekday: i, coreStart, coreEnd, maxDailyMinutes, workAllowed });
+    }
+
+    const limits = {
+        maxWeeklyMinutes: parseInt(document.getElementById('wr-max-weekly').value) || 2400,
+        maxOvertimeMinutes: parseInt(document.getElementById('wr-max-overtime').value) || 720,
+        maxUndertimeMinutes: parseInt(document.getElementById('wr-max-undertime').value) || 240,
+    };
+
+    btnSaveWorkRules.disabled = true;
+    btnSaveWorkRules.textContent = 'Speichere...';
+
+    try {
+        await apiFetch(`/admin/work-rules/${editingWorkRulesUserId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ rules, limits }),
+        });
+
+        workRulesSuccess.textContent = 'Arbeitsregeln erfolgreich gespeichert!';
+        workRulesSuccess.classList.remove('hidden');
+
+        setTimeout(() => {
+            closeWorkRulesModal();
+            workRulesSuccess.classList.add('hidden');
+        }, 1200);
+    } catch (err) {
+        workRulesError.textContent = err.message;
+        workRulesError.classList.remove('hidden');
+    } finally {
+        btnSaveWorkRules.disabled = false;
+        btnSaveWorkRules.textContent = 'Speichern';
+    }
+});
