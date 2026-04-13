@@ -18,6 +18,14 @@ async function apiFetch(path, options = {}) {
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
     const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+
+    // 401 → Token abgelaufen oder ungültig → Auto-Logout
+    if (res.status === 401) {
+        clearToken();
+        window.dispatchEvent(new CustomEvent('auth:logout', { detail: { reason: 'session_expired' } }));
+        throw new Error('Sitzung abgelaufen. Bitte erneut anmelden.');
+    }
+
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Serverfehler');
     return data;
