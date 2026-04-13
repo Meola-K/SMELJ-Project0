@@ -14,6 +14,12 @@ import adminRoutes from './routes/admin.js';
 
 dotenv.config();
 
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'CHANGE_ME_use_a_long_random_secret_here') {
+    console.error('FEHLER: JWT_SECRET ist nicht gesetzt oder noch der Standardwert.');
+    console.error('Erstelle eine .env-Datei basierend auf .env.example und setze einen sicheren Wert.');
+    process.exit(1);
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const server = createServer(app);

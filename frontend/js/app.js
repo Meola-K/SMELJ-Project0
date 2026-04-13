@@ -171,6 +171,20 @@ btnLogout.addEventListener('click', () => {
     window.location.hash = '';
 });
 
+// 401 Auto-Logout (Token abgelaufen oder ungültig)
+window.addEventListener('auth:logout', (e) => {
+    currentUser = null;
+    clearInterval(todayTimer);
+    appShell.classList.add('hidden');
+    pageLogin.classList.remove('hidden');
+    closeSidebar();
+    window.location.hash = '';
+    if (e.detail?.reason === 'session_expired') {
+        loginError.textContent = 'Ihre Sitzung ist abgelaufen. Bitte erneut anmelden.';
+        loginError.classList.remove('hidden');
+    }
+});
+
 // ── Auto-Login ──────────────────────────────────────────────
 (async function init() {
     const token = getToken();
