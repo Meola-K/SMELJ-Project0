@@ -929,167 +929,79 @@ body {
     }
 }
 
-/* ── Admin KPI Stats ────────────────────────────────── */
-
-.admin-stats {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1rem;
-    margin-bottom: 1.5rem;
+/* ── Antragsverwaltung (Vorgesetzter/Admin) ─────────── */
+.req-tabs {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 1.25rem;
 }
 
-.admin-stat-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 1.25rem;
+.req-tab {
     display: flex;
     align-items: center;
-    gap: 1rem;
-}
-
-.admin-stat-icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.admin-stat-icon svg {
-    width: 22px;
-    height: 22px;
-}
-
-.admin-stat-icon--users {
-    background: #dbeafe;
-    color: #2563eb;
-}
-.admin-stat-icon--users svg { stroke: #2563eb; }
-
-.admin-stat-icon--stamped {
-    background: #dcfce7;
-    color: #16a34a;
-}
-.admin-stat-icon--stamped svg { stroke: #16a34a; }
-
-.admin-stat-icon--requests {
-    background: #fef9c3;
-    color: #ca8a04;
-}
-.admin-stat-icon--requests svg { stroke: #ca8a04; }
-
-.admin-stat-icon--devices {
-    background: #f3e8ff;
-    color: #9333ea;
-}
-.admin-stat-icon--devices svg { stroke: #9333ea; }
-
-.admin-stat-content {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-}
-
-.admin-stat-value {
-    font-size: 1.5rem;
-    font-weight: 700;
-    line-height: 1.2;
-    font-variant-numeric: tabular-nums;
-}
-
-.admin-stat-label {
-    font-size: 0.78rem;
-    color: var(--text-muted);
+    gap: 0.4rem;
+    padding: 0.6rem 1.25rem;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    font-size: 0.9rem;
     font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
 }
 
-@media (max-width: 1024px) {
-    .admin-stats {
-        grid-template-columns: repeat(2, 1fr);
-    }
+.req-tab:hover { color: var(--text); }
+
+.req-tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
 }
 
-@media (max-width: 480px) {
-    .admin-stats {
-        grid-template-columns: 1fr;
-    }
+.req-tab-badge {
+    background: var(--danger);
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 0.05rem 0.45rem;
+    min-width: 18px;
+    text-align: center;
 }
 
-/* ── Arbeitsregeln Card ─────────────────────────────── */
+.req-panel { display: block; }
+.req-panel.hidden { display: none; }
 
-.work-rules-card { margin-bottom: 1.5rem; }
+.req-filter {
+    margin-bottom: 1rem;
+    padding: 0.85rem 1rem;
+}
 
-.work-rules-limits {
+.req-filter-row {
     display: flex;
-    gap: 1.5rem;
-    margin-top: 1rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid var(--border);
+    gap: 1rem;
+    align-items: flex-end;
     flex-wrap: wrap;
 }
 
-.work-rules-limit-item {
-    display: flex;
-    flex-direction: column;
+.req-filter-row .form-group {
+    margin: 0;
+    min-width: 140px;
 }
 
-.work-rules-limit-value {
-    font-size: 1.1rem;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-}
-
-.work-rules-limit-label {
-    font-size: 0.75rem;
+.req-filter-row .form-group label {
+    font-size: 0.78rem;
+    margin-bottom: 0.25rem;
+    display: block;
     color: var(--text-muted);
 }
 
-.badge-allowed {
-    background: #dcfce7;
-    color: #166534;
-}
-
-.badge-blocked {
-    background: #fee2e2;
-    color: #991b1b;
-}
-
-/* ── Work Rules Modal (wider) ───────────────────────── */
-
-.modal-content--wide {
-    max-width: 680px;
-}
-
-.modal-content--wide .table input[type="time"],
-.modal-content--wide .table input[type="number"] {
-    padding: 0.3rem 0.4rem;
-    font-size: 0.82rem;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    width: 100%;
-    min-width: 80px;
-}
-
-.modal-content--wide .table input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    cursor: pointer;
-}
-
-.btn-rules {
-    background: #e0e7ff;
-    color: #3730a3;
-    border: none;
-    font-size: 0.75rem;
-}
-
-.btn-rules:hover {
-    background: #c7d2fe;
-}
-
+.btn-approve { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+.btn-approve:hover { background: #bbf7d0; }
+.btn-deny    { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+.btn-deny:hover    { background: #fecaca; }
 
 /* ── Stempel-Tabelle ── */
 .stamps-table {
@@ -1108,4 +1020,3 @@ body {
 
 .badge-stamp-in  { background: #dcfce7; color: #166534; }
 .badge-stamp-out { background: #fee2e2; color: #991b1b; }
-
