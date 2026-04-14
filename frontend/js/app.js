@@ -331,14 +331,30 @@ function renderTodayStamps(stamps) {
         return;
     }
     const sourceLabel = { web: 'Web', arduino: 'NFC', app: 'App' };
-    todayStampsList.innerHTML = stamps.map(s => `
-        <div class="stamp-entry">
-            <div class="stamp-entry-icon ${s.type}"></div>
-            <span class="stamp-entry-time">${formatTime(s.stamp_time)}</span>
-            <span class="stamp-entry-label">${s.type === 'in' ? 'Einstempeln' : 'Ausstempeln'}</span>
-            <span class="stamp-entry-source">${sourceLabel[s.source] || s.source || ''}</span>
-        </div>
-    `).join('');
+    todayStampsList.innerHTML = `
+        <table class="table stamps-table">
+            <thead>
+                <tr>
+                    <th>Typ</th>
+                    <th>Uhrzeit</th>
+                    <th>Quelle</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${stamps.map(s => `
+                    <tr>
+                        <td>
+                            <span class="badge ${s.type === 'in' ? 'badge-stamp-in' : 'badge-stamp-out'}">
+                                ${s.type === 'in' ? 'Einstempeln' : 'Ausstempeln'}
+                            </span>
+                        </td>
+                        <td class="stamp-time-cell">${formatTime(s.stamp_time)}</td>
+                        <td>${sourceLabel[s.source] || s.source || '–'}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
 }
 
 btnStamp.addEventListener('click', async () => {

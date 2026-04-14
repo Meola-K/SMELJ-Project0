@@ -1089,3 +1089,23 @@ body {
 .btn-rules:hover {
     background: #c7d2fe;
 }
+
+
+/* ── Stempel-Tabelle ── */
+.stamps-table {
+    margin-top: 0.5rem;
+}
+
+.stamps-table td {
+    vertical-align: middle;
+}
+
+.stamp-time-cell {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.badge-stamp-in  { background: #dcfce7; color: #166534; }
+.badge-stamp-out { background: #fee2e2; color: #991b1b; }
+
