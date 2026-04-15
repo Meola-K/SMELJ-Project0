@@ -312,6 +312,10 @@
                             <span class="req-tab-badge hidden" id="pending-count-badge">0</span>
                         </button>
                         <button class="req-tab" data-tab="all">Alle Anträge</button>
+                        <button class="req-tab" data-tab="corrections">
+                            Korrekturen
+                            <span class="req-tab-badge hidden" id="corrections-count-badge">0</span>
+                        </button>
                     </div>
 
                     <!-- Tab: Ausstehend -->
@@ -374,6 +378,26 @@
                                     </tr>
                                 </thead>
                                 <tbody id="all-requests-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Tab: Korrekturen (SCRUM-163) -->
+                    <div id="req-panel-corrections" class="req-panel hidden">
+                        <div class="card">
+                            <div id="corrections-empty" class="text-muted hidden">Keine offenen Korrekturanträge.</div>
+                            <table class="table" id="corrections-table">
+                                <thead>
+                                    <tr>
+                                        <th>Mitarbeiter</th>
+                                        <th>Typ</th>
+                                        <th>Original</th>
+                                        <th>Korrektur</th>
+                                        <th>Begründung</th>
+                                        <th>Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="corrections-tbody"></tbody>
                             </table>
                         </div>
                     </div>

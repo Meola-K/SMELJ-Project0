@@ -271,6 +271,19 @@ function setupSocket() {
             showToast('Neuer Antrag', 'Ein Mitarbeiter hat einen neuen Antrag eingereicht', 'info');
         }
     });
+
+    socket.on('correction:reviewed', (data) => {
+        const statusLabel = data.status === 'approved' ? 'genehmigt' : 'abgelehnt';
+        const type = data.status === 'approved' ? 'success' : 'error';
+        showToast(`Korrektur ${statusLabel}`, `Bearbeitet von ${data.reviewerName}`, type);
+    });
+
+    socket.on('correction:new', () => {
+        if (currentUser.role === 'admin' || currentUser.role === 'vorgesetzter') {
+            showToast('Neue Korrektur', 'Ein Mitarbeiter hat einen Korrekturantrag eingereicht', 'info');
+            if (typeof loadPendingCorrections === 'function') loadPendingCorrections();
+        }
+    });
 }
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -1078,6 +1091,7 @@ document.querySelectorAll('.req-tab').forEach(tab => {
         const target = tab.dataset.tab;
         document.getElementById('req-panel-pending').classList.toggle('hidden', target !== 'pending');
         document.getElementById('req-panel-all').classList.toggle('hidden', target !== 'all');
+        document.getElementById('req-panel-corrections').classList.toggle('hidden', target !== 'corrections');
     });
 });
 
@@ -1091,7 +1105,7 @@ document.getElementById('btn-reset-filter')?.addEventListener('click', () => {
 });
 
 async function loadRequestsOverview() {
-    await Promise.all([loadPendingRequests(), loadAllRequests()]);
+    await Promise.all([loadPendingRequests(), loadAllRequests(), loadPendingCorrections()]);
 }
 
 async function loadPendingRequests() {
@@ -1208,6 +1222,81 @@ window._reviewRequest = async function(id, status) {
         });
         await loadRequestsOverview();
         updateSidebarPendingBadge();
+    } catch (err) {
+        alert('Fehler: ' + err.message);
+    }
+};
+
+// ── SCRUM-163: Zeitkorrekturen verwalten ──────────────────────
+
+const correctionTypeLabels = { add: 'Hinzufügen', edit: 'Bearbeiten', delete: 'Löschen' };
+
+async function loadPendingCorrections() {
+    try {
+        const corrs = await apiFetch('/admin/corrections/pending');
+        renderPendingCorrections(corrs);
+    } catch (err) {
+        console.error('Fehler beim Laden der Korrekturen:', err);
+    }
+}
+
+function renderPendingCorrections(corrs) {
+    const tbody = document.getElementById('corrections-tbody');
+    const emptyEl = document.getElementById('corrections-empty');
+    const table = document.getElementById('corrections-table');
+    const badge = document.getElementById('corrections-count-badge');
+
+    if (corrs.length > 0) {
+        badge.textContent = corrs.length;
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+    }
+
+    if (corrs.length === 0) {
+        table.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        return;
+    }
+    table.classList.remove('hidden');
+    emptyEl.classList.add('hidden');
+
+    tbody.innerHTML = corrs.map(c => {
+        const typeLabel = correctionTypeLabels[c.type] || c.type;
+        const stampLabel = c.stamp_type === 'in' ? 'Einstempeln' : c.stamp_type === 'out' ? 'Ausstempeln' : '';
+        const original = c.original_time
+            ? `${formatDate(c.original_time)} ${formatTime(c.original_time)}`
+            : '<span class="text-muted">–</span>';
+        const corrected = c.corrected_time
+            ? `${formatDate(c.corrected_time)} ${formatTime(c.corrected_time)}${stampLabel ? ` (${stampLabel})` : ''}`
+            : '<span class="text-muted">–</span>';
+        return `
+            <tr>
+                <td><strong>${esc(c.user_name)}</strong></td>
+                <td><span class="badge badge-pending">${typeLabel}</span></td>
+                <td>${original}</td>
+                <td>${corrected}</td>
+                <td>${esc(c.reason)}</td>
+                <td class="actions-cell">
+                    <button class="btn btn-sm btn-approve" onclick="window._reviewCorrection(${c.id}, 'approved')">Genehmigen</button>
+                    <button class="btn btn-sm btn-deny" onclick="window._reviewCorrection(${c.id}, 'denied')">Ablehnen</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+window._reviewCorrection = async function(id, status) {
+    const msg = status === 'approved'
+        ? 'Korrektur wirklich genehmigen? Der Stempel wird angepasst.'
+        : 'Korrektur wirklich ablehnen?';
+    if (!confirm(msg)) return;
+    try {
+        await apiFetch(`/admin/corrections/${id}/review`, {
+            method: 'PUT',
+            body: JSON.stringify({ status }),
+        });
+        await loadPendingCorrections();
     } catch (err) {
         alert('Fehler: ' + err.message);
     }

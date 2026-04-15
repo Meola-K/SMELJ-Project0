@@ -92,6 +92,25 @@ CREATE TABLE vacation_entitlements (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE corrections (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    stamp_id INT DEFAULT NULL,
+    type ENUM('add','edit','delete') NOT NULL,
+    original_time DATETIME DEFAULT NULL,
+    corrected_time DATETIME DEFAULT NULL,
+    stamp_type ENUM('in','out') DEFAULT NULL,
+    reason TEXT NOT NULL,
+    status ENUM('pending','approved','denied') DEFAULT 'pending',
+    reviewed_by INT DEFAULT NULL,
+    reviewed_at DATETIME DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (stamp_id) REFERENCES timestamps_log(id) ON DELETE SET NULL,
+    FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_corr_status (user_id, status)
+);
+
 INSERT INTO groups_table (name) VALUES ('Allgemein'), ('Entwicklung'), ('Verwaltung');
 
 INSERT INTO users (email, password, first_name, last_name, role, group_id)
