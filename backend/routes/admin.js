@@ -463,4 +463,117 @@ router.get('/vacation/balance', auth, async (req, res) => {
     }
 });
 
+router.get('/corrections/pending', auth, role('vorgesetzter', 'admin'), async (req, res) => {
+    try {
+        let query, params;
+        if (req.user.role === 'admin') {
+            query = `SELECT c.*, CONCAT(u.first_name, ' ', u.last_name) as user_name
+                     FROM corrections c JOIN users u ON c.user_id = u.id
+                     WHERE c.status = 'pending' ORDER BY c.created_at ASC`;
+            params = [];
+        } else {
+            query = `SELECT c.*, CONCAT(u.first_name, ' ', u.last_name) as user_name
+                     FROM corrections c JOIN users u ON c.user_id = u.id
+                     WHERE c.status = 'pending' AND u.supervisor_id = ? ORDER BY c.created_at ASC`;
+            params = [req.user.id];
+        }
+        const [rows] = await db.query(query, params);
+        res.json(rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+router.put('/corrections/:id/review', auth, role('vorgesetzter', 'admin'), async (req, res) => {
+    try {
+        const { status } = req.body;
+        if (!['approved', 'denied'].includes(status)) return res.status(400).json({ error: 'Ungültiger Status' });
+
+        const [corrections] = await db.query('SELECT * FROM corrections WHERE id = ? AND status = "pending"', [req.params.id]);
+        if (!corrections.length) return res.status(404).json({ error: 'Korrektur nicht gefunden' });
+
+        const correction = corrections[0];
+
+        if (req.user.role === 'vorgesetzter') {
+            const [user] = await db.query('SELECT supervisor_id FROM users WHERE id = ?', [correction.user_id]);
+            if (user[0]?.supervisor_id !== req.user.id) {
+                return res.status(403).json({ error: 'Nicht dein Mitarbeiter' });
+            }
+        }
+
+        await db.query(
+            'UPDATE corrections SET status = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?',
+            [status, req.user.id, req.params.id]
+        );
+
+        if (status === 'approved') {
+            if (correction.type === 'add') {
+                await db.query(
+                    'INSERT INTO timestamps_log (user_id, type, stamp_time, source) VALUES (?, ?, ?, ?)',
+                    [correction.user_id, correction.stamp_type, correction.corrected_time, 'web']
+                );
+            } else if (correction.type === 'edit' && correction.stamp_id) {
+                await db.query(
+                    'UPDATE timestamps_log SET stamp_time = ? WHERE id = ?',
+                    [correction.corrected_time, correction.stamp_id]
+                );
+            } else if (correction.type === 'delete' && correction.stamp_id) {
+                await db.query('DELETE FROM timestamps_log WHERE id = ?', [correction.stamp_id]);
+            }
+        }
+
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`user-${correction.user_id}`).emit('correction:reviewed', {
+                id: correction.id, status,
+                reviewerName: `${req.user.firstName} ${req.user.lastName}`
+            });
+        }
+
+        res.json({ message: status === 'approved' ? 'Korrektur genehmigt' : 'Korrektur abgelehnt' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+router.post('/corrections', auth, async (req, res) => {
+    try {
+        const { stampId, type, correctedTime, stampType, reason } = req.body;
+        if (!type || !reason) return res.status(400).json({ error: 'Typ und Begründung erforderlich' });
+        if (!['add', 'edit', 'delete'].includes(type)) return res.status(400).json({ error: 'Ungültiger Korrekturtyp' });
+
+        let originalTime = null;
+        if (stampId) {
+            const [stamp] = await db.query('SELECT * FROM timestamps_log WHERE id = ? AND user_id = ?', [stampId, req.user.id]);
+            if (!stamp.length) return res.status(404).json({ error: 'Stempel nicht gefunden' });
+            originalTime = stamp[0].stamp_time;
+        }
+
+        const [result] = await db.query(
+            'INSERT INTO corrections (user_id, stamp_id, type, original_time, corrected_time, stamp_type, reason) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [req.user.id, stampId || null, type, originalTime, correctedTime || null, stampType || null, reason]
+        );
+
+        const io = req.app.get('io');
+        if (io) {
+            const [user] = await db.query('SELECT supervisor_id FROM users WHERE id = ?', [req.user.id]);
+            if (user[0]?.supervisor_id) {
+                io.to(`user-${user[0].supervisor_id}`).emit('correction:new', {
+                    id: result.insertId,
+                    userId: req.user.id,
+                    userName: `${req.user.firstName} ${req.user.lastName}`,
+                    type
+                });
+            }
+        }
+
+        res.json({ id: result.insertId, message: 'Korrekturantrag eingereicht' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
 export default router;

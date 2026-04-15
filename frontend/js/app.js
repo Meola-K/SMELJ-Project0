@@ -274,6 +274,19 @@ function setupSocket() {
             showToast('Neuer Antrag', 'Ein Mitarbeiter hat einen neuen Antrag eingereicht', 'info');
         }
     });
+
+    socket.on('correction:reviewed', (data) => {
+        const statusLabel = data.status === 'approved' ? 'genehmigt' : 'abgelehnt';
+        const type = data.status === 'approved' ? 'success' : 'error';
+        showToast(`Korrektur ${statusLabel}`, `Bearbeitet von ${data.reviewerName}`, type);
+    });
+
+    socket.on('correction:new', () => {
+        if (currentUser.role === 'admin' || currentUser.role === 'vorgesetzter') {
+            showToast('Neue Korrektur', 'Ein Mitarbeiter hat einen Korrekturantrag eingereicht', 'info');
+            if (typeof loadPendingCorrections === 'function') loadPendingCorrections();
+        }
+    });
 }
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -1121,6 +1134,7 @@ document.querySelectorAll('.req-tab').forEach(tab => {
         const target = tab.dataset.tab;
         document.getElementById('req-panel-pending').classList.toggle('hidden', target !== 'pending');
         document.getElementById('req-panel-all').classList.toggle('hidden', target !== 'all');
+        document.getElementById('req-panel-corrections').classList.toggle('hidden', target !== 'corrections');
     });
 });
 
@@ -1134,7 +1148,7 @@ document.getElementById('btn-reset-filter')?.addEventListener('click', () => {
 });
 
 async function loadRequestsOverview() {
-    await Promise.all([loadPendingRequests(), loadAllRequests()]);
+    await Promise.all([loadPendingRequests(), loadAllRequests(), loadPendingCorrections()]);
 }
 
 async function loadPendingRequests() {
@@ -1255,103 +1269,3 @@ window._reviewRequest = async function(id, status) {
         alert('Fehler: ' + err.message);
     }
 };
-
-// ── WebSocket (Socket.IO) ────────────────────────────────────
-
-let socket = null;
-
-/**
- * Toast-Benachrichtigung anzeigen
- * @param {string} title
- * @param {string} msg
- * @param {'info'|'success'|'warning'} type
- * @param {number} duration ms
- */
-function showToast(title, msg, type = 'info', duration = 5000) {
-    const icons = { info: 'ℹ️', success: '✅', warning: '⚠️' };
-    const container = document.getElementById('toast-container');
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.innerHTML = `
-        <span class="toast-icon">${icons[type] || 'ℹ️'}</span>
-        <div class="toast-body">
-            <div class="toast-title">${title}</div>
-            ${msg ? `<div class="toast-msg">${msg}</div>` : ''}
-        </div>
-    `;
-    container.appendChild(toast);
-
-    const remove = () => {
-        toast.classList.add('toast-exit');
-        toast.addEventListener('animationend', () => toast.remove(), { once: true });
-    };
-
-    const timer = setTimeout(remove, duration);
-    toast.addEventListener('click', () => { clearTimeout(timer); remove(); });
-}
-
-/**
- * Socket.IO verbinden – wird nach erfolgreichem Login aufgerufen
- */
-function connectSocket(token) {
-    if (socket) { socket.disconnect(); socket = null; }
-
-    socket = io({ auth: { token }, transports: ['websocket', 'polling'] });
-
-    socket.on('connect', () => {
-        console.log('[Socket] Verbunden:', socket.id);
-    });
-
-    socket.on('connect_error', (err) => {
-        console.warn('[Socket] Verbindungsfehler:', err.message);
-    });
-
-    // ── Neuer Antrag eines Mitarbeiters (für Vorgesetzte / Admin) ──
-    socket.on('request:new', (data) => {
-        const typeLabel = { urlaub: 'Urlaub', gleitzeit: 'Gleitzeit', homeoffice: 'Homeoffice', krank: 'Krank' };
-        const from = new Date(data.dateFrom).toLocaleDateString('de-DE');
-        const to   = new Date(data.dateTo).toLocaleDateString('de-DE');
-        const zeitraum = data.dateFrom === data.dateTo ? from : `${from} – ${to}`;
-        showToast(
-            `Neuer Antrag von ${data.userName}`,
-            `${typeLabel[data.type] || data.type} · ${zeitraum}`,
-            'info'
-        );
-        // Antragsverwaltung aktualisieren, wenn gerade geöffnet
-        if (window.location.hash === '#requests-overview') {
-            loadRequestsOverview();
-        }
-    });
-
-    // ── Antrag wurde bearbeitet (für den antragstellenden Mitarbeiter) ──
-    socket.on('request:reviewed', (data) => {
-        const statusLabel = data.status === 'approved' ? 'genehmigt ✅' : 'abgelehnt ❌';
-        const type = data.status === 'approved' ? 'success' : 'warning';
-        showToast(
-            `Dein Antrag wurde ${statusLabel}`,
-            `Bearbeitet von ${data.reviewerName}`,
-            type
-        );
-        // Dashboard-Anträge & Urlaubskonto aktualisieren
-        loadMyRequests();
-        loadVacation();
-    });
-
-    // ── Stempel-Update (für Team-Übersicht) ──
-    socket.on('stamp:update', () => {
-        if (window.location.hash === '#team') {
-            loadTeamPage();
-        }
-    });
-
-    socket.on('disconnect', () => {
-        console.log('[Socket] Getrennt');
-    });
-}
-
-/**
- * Socket trennen – beim Logout aufrufen
- */
-function disconnectSocket() {
-    if (socket) { socket.disconnect(); socket = null; }
-}
