@@ -170,6 +170,8 @@ btnLogout.addEventListener('click', () => {
     clearToken();
     currentUser = null;
     clearInterval(todayTimer);
+    clearInterval(window._pendingBadgeTimer);
+    if (socket) { socket.disconnect(); socket = null; }
     appShell.classList.add('hidden');
     pageLogin.classList.remove('hidden');
     closeSidebar();
@@ -211,8 +213,64 @@ function showApp() {
     updateSidebarUser();
     updateSidebarForRole(currentUser.role);
 
+    if (currentUser.role === 'admin' || currentUser.role === 'vorgesetzter') {
+        updateSidebarPendingBadge();
+        clearInterval(window._pendingBadgeTimer);
+        window._pendingBadgeTimer = setInterval(updateSidebarPendingBadge, 30000);
+    }
+
+    setupSocket();
+
     // Router starten (setzt auch die initiale Route)
     startRouter('dashboard');
+}
+
+async function updateSidebarPendingBadge() {
+    try {
+        const reqs = await apiFetch('/requests/pending');
+        const badge = document.getElementById('sidebar-pending-badge');
+        if (!badge) return;
+        if (reqs.length > 0) {
+            badge.textContent = reqs.length;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    } catch {}
+}
+
+function showToast(title, body, type = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `<div class="toast-title">${esc(title)}</div>${body ? `<div class="toast-body">${esc(body)}</div>` : ''}`;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.transition = 'opacity 0.3s';
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 5000);
+}
+
+let socket = null;
+function setupSocket() {
+    if (typeof io === 'undefined') return;
+    if (socket) socket.disconnect();
+    socket = io({ auth: { token: getToken() } });
+
+    socket.on('request:reviewed', (data) => {
+        const statusLabel = data.status === 'approved' ? 'genehmigt' : 'abgelehnt';
+        const type = data.status === 'approved' ? 'success' : 'error';
+        showToast(`Antrag ${statusLabel}`, `Bearbeitet von ${data.reviewerName}`, type);
+    });
+
+    socket.on('request:new', () => {
+        if (currentUser.role === 'admin' || currentUser.role === 'vorgesetzter') {
+            updateSidebarPendingBadge();
+            showToast('Neuer Antrag', 'Ein Mitarbeiter hat einen neuen Antrag eingereicht', 'info');
+        }
+    });
 }
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -1148,8 +1206,8 @@ window._reviewRequest = async function(id, status) {
             method: 'PUT',
             body: JSON.stringify({ status }),
         });
-        // Beide Listen neu laden
         await loadRequestsOverview();
+        updateSidebarPendingBadge();
     } catch (err) {
         alert('Fehler: ' + err.message);
     }
