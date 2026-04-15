@@ -154,6 +154,7 @@ btnLogin.addEventListener('click', async () => {
         });
         setToken(data.token);
         currentUser = data.user;
+        connectSocket(data.token);
         showApp();
     } catch (err) {
         loginError.textContent = err.message;
@@ -167,6 +168,7 @@ loginPassword.addEventListener('keydown', (e) => {
 
 // ── Logout ──────────────────────────────────────────────────
 btnLogout.addEventListener('click', () => {
+    disconnectSocket();
     clearToken();
     currentUser = null;
     clearInterval(todayTimer);
@@ -199,6 +201,7 @@ window.addEventListener('auth:logout', (e) => {
     try {
         const data = await apiFetch('/auth/me');
         currentUser = data;
+        connectSocket(getToken());
         showApp();
     } catch {
         clearToken();
@@ -985,9 +988,16 @@ const statusLabels = {
 function openRequestModal() {
     newRequestError.classList.add('hidden');
     newRequestSuccess.classList.add('hidden');
+    document.getElementById('req-date-hint').classList.add('hidden');
     document.getElementById('req-type').value = 'urlaub';
-    document.getElementById('req-from').value = '';
-    document.getElementById('req-to').value = '';
+    // Heute als Mindestdatum setzen
+    const today = new Date().toISOString().split('T')[0];
+    const reqFrom = document.getElementById('req-from');
+    const reqTo   = document.getElementById('req-to');
+    reqFrom.value = '';
+    reqTo.value   = '';
+    reqFrom.min   = today;
+    reqTo.min     = today;
     document.getElementById('req-note').value = '';
     requestModal.classList.remove('hidden');
 }
@@ -1001,17 +1011,48 @@ btnCloseRequestModal.addEventListener('click', closeRequestModal);
 btnCancelRequestModal.addEventListener('click', closeRequestModal);
 document.querySelector('.modal-backdrop-request')?.addEventListener('click', closeRequestModal);
 
+// Datum-Von → Datum-Bis Mindest-Sync
+document.getElementById('req-from').addEventListener('change', () => {
+    const from = document.getElementById('req-from').value;
+    const reqTo = document.getElementById('req-to');
+    if (from) {
+        reqTo.min = from;
+        if (reqTo.value && reqTo.value < from) reqTo.value = from;
+    }
+    validateReqDates();
+});
+document.getElementById('req-to').addEventListener('change', validateReqDates);
+
+function validateReqDates() {
+    const from = document.getElementById('req-from').value;
+    const to   = document.getElementById('req-to').value;
+    const hint = document.getElementById('req-date-hint');
+    if (from && to && to < from) {
+        hint.textContent = 'Das Enddatum muss nach dem Startdatum liegen.';
+        hint.classList.remove('hidden');
+        return false;
+    }
+    hint.classList.add('hidden');
+    return true;
+}
+
 btnSubmitRequest.addEventListener('click', async () => {
     newRequestError.classList.add('hidden');
     newRequestSuccess.classList.add('hidden');
 
-    const type = document.getElementById('req-type').value;
+    const type     = document.getElementById('req-type').value;
     const dateFrom = document.getElementById('req-from').value;
-    const dateTo = document.getElementById('req-to').value;
-    const note = document.getElementById('req-note').value.trim();
+    const dateTo   = document.getElementById('req-to').value;
+    const note     = document.getElementById('req-note').value.trim();
 
+    // Client-seitige Validierung
     if (!dateFrom || !dateTo) {
         newRequestError.textContent = 'Bitte Start- und Enddatum angeben.';
+        newRequestError.classList.remove('hidden');
+        return;
+    }
+    if (dateTo < dateFrom) {
+        newRequestError.textContent = 'Das Enddatum muss nach dem Startdatum liegen.';
         newRequestError.classList.remove('hidden');
         return;
     }
@@ -1024,14 +1065,16 @@ btnSubmitRequest.addEventListener('click', async () => {
             method: 'POST',
             body: JSON.stringify({ type, dateFrom, dateTo, note: note || undefined }),
         });
-        newRequestSuccess.textContent = 'Antrag erfolgreich eingereicht!';
+        newRequestSuccess.textContent = 'Antrag erfolgreich eingereicht! Dein Vorgesetzter wurde benachrichtigt.';
         newRequestSuccess.classList.remove('hidden');
         await loadMyRequests();
+        await loadVacation();
         setTimeout(() => {
             closeRequestModal();
             newRequestSuccess.classList.add('hidden');
-        }, 1200);
+        }, 1800);
     } catch (err) {
+        // Überlappungsfehler vom Backend klar anzeigen
         newRequestError.textContent = err.message;
         newRequestError.classList.remove('hidden');
     } finally {
@@ -1235,81 +1278,6 @@ window._reviewRequest = async function(id, status) {
         });
         await loadRequestsOverview();
         updateSidebarPendingBadge();
-    } catch (err) {
-        alert('Fehler: ' + err.message);
-    }
-};
-
-// ── SCRUM-163: Zeitkorrekturen verwalten ──────────────────────
-
-const correctionTypeLabels = { add: 'Hinzufügen', edit: 'Bearbeiten', delete: 'Löschen' };
-
-async function loadPendingCorrections() {
-    try {
-        const corrs = await apiFetch('/admin/corrections/pending');
-        renderPendingCorrections(corrs);
-    } catch (err) {
-        console.error('Fehler beim Laden der Korrekturen:', err);
-    }
-}
-
-function renderPendingCorrections(corrs) {
-    const tbody = document.getElementById('corrections-tbody');
-    const emptyEl = document.getElementById('corrections-empty');
-    const table = document.getElementById('corrections-table');
-    const badge = document.getElementById('corrections-count-badge');
-
-    if (corrs.length > 0) {
-        badge.textContent = corrs.length;
-        badge.classList.remove('hidden');
-    } else {
-        badge.classList.add('hidden');
-    }
-
-    if (corrs.length === 0) {
-        table.classList.add('hidden');
-        emptyEl.classList.remove('hidden');
-        return;
-    }
-    table.classList.remove('hidden');
-    emptyEl.classList.add('hidden');
-
-    tbody.innerHTML = corrs.map(c => {
-        const typeLabel = correctionTypeLabels[c.type] || c.type;
-        const stampLabel = c.stamp_type === 'in' ? 'Einstempeln' : c.stamp_type === 'out' ? 'Ausstempeln' : '';
-        const original = c.original_time
-            ? `${formatDate(c.original_time)} ${formatTime(c.original_time)}`
-            : '<span class="text-muted">–</span>';
-        const corrected = c.corrected_time
-            ? `${formatDate(c.corrected_time)} ${formatTime(c.corrected_time)}${stampLabel ? ` (${stampLabel})` : ''}`
-            : '<span class="text-muted">–</span>';
-        return `
-            <tr>
-                <td><strong>${esc(c.user_name)}</strong></td>
-                <td><span class="badge badge-pending">${typeLabel}</span></td>
-                <td>${original}</td>
-                <td>${corrected}</td>
-                <td>${esc(c.reason)}</td>
-                <td class="actions-cell">
-                    <button class="btn btn-sm btn-approve" onclick="window._reviewCorrection(${c.id}, 'approved')">Genehmigen</button>
-                    <button class="btn btn-sm btn-deny" onclick="window._reviewCorrection(${c.id}, 'denied')">Ablehnen</button>
-                </td>
-            </tr>
-        `;
-    }).join('');
-}
-
-window._reviewCorrection = async function(id, status) {
-    const msg = status === 'approved'
-        ? 'Korrektur wirklich genehmigen? Der Stempel wird angepasst.'
-        : 'Korrektur wirklich ablehnen?';
-    if (!confirm(msg)) return;
-    try {
-        await apiFetch(`/admin/corrections/${id}/review`, {
-            method: 'PUT',
-            body: JSON.stringify({ status }),
-        });
-        await loadPendingCorrections();
     } catch (err) {
         alert('Fehler: ' + err.message);
     }

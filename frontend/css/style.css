@@ -1056,9 +1056,16 @@ body {
 .btn-deny    { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
 .btn-deny:hover    { background: #fecaca; }
 
-/* ── Stempel-Tabelle ── */
-.stamps-table {
-    margin-top: 0.5rem;
+/* ── Toast-Benachrichtigungen (WebSocket) ────────────────── */
+.toast-container {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    z-index: 9999;
+    pointer-events: none;
 }
 
 .stamps-table td {

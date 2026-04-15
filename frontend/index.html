@@ -189,10 +189,10 @@
                             <div class="form-group">
                                 <label for="req-type">Antragstyp *</label>
                                 <select id="req-type">
-                                    <option value="urlaub">Urlaub</option>
-                                    <option value="gleitzeit">Gleitzeit</option>
-                                    <option value="homeoffice">Homeoffice</option>
-                                    <option value="krank">Krank</option>
+                                    <option value="urlaub">🏖 Urlaub</option>
+                                    <option value="gleitzeit">⏱ Gleitzeit</option>
+                                    <option value="homeoffice">🏠 Homeoffice</option>
+                                    <option value="krank">🤒 Krank</option>
                                 </select>
                             </div>
                             <div class="form-row">
@@ -205,10 +205,12 @@
                                     <input type="date" id="req-to" required>
                                 </div>
                             </div>
+                            <div id="req-date-hint" class="form-hint hidden"></div>
                             <div class="form-group">
                                 <label for="req-note">Notiz</label>
-                                <input type="text" id="req-note" placeholder="Optional">
+                                <input type="text" id="req-note" placeholder="Optional – z.B. Reiseziel, Arzttermin …" maxlength="200">
                             </div>
+                            <p class="form-hint">Nach dem Absenden wird dein Vorgesetzter automatisch benachrichtigt.</p>
                             <div class="modal-footer">
                                 <button type="button" class="btn" id="btn-cancel-request-modal">Abbrechen</button>
                                 <button type="button" class="btn btn-primary" id="btn-submit-request">Antrag stellen</button>
