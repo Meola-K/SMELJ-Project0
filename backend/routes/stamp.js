@@ -145,10 +145,19 @@ router.post('/nfc', async (req, res) => {
         const { nfcUid, deviceId } = req.body;
         if (!nfcUid || !deviceId) return res.status(400).json({ error: 'NFC-UID und Device-ID erforderlich' });
 
-        await db.query('UPDATE devices SET last_seen = NOW() WHERE id = ?', [deviceId]);
+        const [existing] = await db.query('SELECT * FROM devices WHERE id = ?', [deviceId]);
+
+        if (!existing.length) {
+            await db.query(
+                'INSERT INTO devices (id, name, location, active, last_seen) VALUES (?, ?, NULL, 1, NOW())',
+                [deviceId, deviceId]
+            );
+        } else {
+            await db.query('UPDATE devices SET last_seen = NOW() WHERE id = ?', [deviceId]);
+        }
 
         const [devices] = await db.query('SELECT * FROM devices WHERE id = ? AND active = 1', [deviceId]);
-        if (!devices.length) return res.status(404).json({ error: 'Gerät nicht gefunden' });
+        if (!devices.length) return res.status(403).json({ error: 'Gerät deaktiviert' });
 
         const device = devices[0];
 

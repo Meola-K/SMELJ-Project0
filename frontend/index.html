@@ -440,7 +440,7 @@
             <div id="page-devices" class="page hidden">
                 <div class="container">
                     <div class="page-header">
-                        <h1>Geräte-Überwachung</h1>
+                        <h1>Stempeluhren</h1>
                         <button id="btn-open-create-device" class="btn btn-primary">+ Gerät registrieren</button>
                     </div>
                     <div class="card">
@@ -453,10 +453,39 @@
                                     <th>Standort</th>
                                     <th>Status</th>
                                     <th>Zuletzt gesehen</th>
+                                    <th>Aktionen</th>
                                 </tr>
                             </thead>
                             <tbody id="devices-tbody"></tbody>
                         </table>
+                    </div>
+
+                    <div class="card" style="margin-top:1.5rem">
+                        <h3>NFC-Tags zuweisen</h3>
+                        <p class="text-muted text-sm" style="margin-bottom:1rem">Gerät und Mitarbeiter wählen, dann NFC-Karte an das Gerät halten.</p>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="assign-device">Stempeluhr</label>
+                                <select id="assign-device"></select>
+                            </div>
+                            <div class="form-group">
+                                <label for="assign-user">Mitarbeiter</label>
+                                <select id="assign-user"></select>
+                            </div>
+                        </div>
+                        <button id="btn-assign-nfc" class="btn btn-primary">Zuweisungsmodus starten</button>
+                        <div id="assign-status" class="hidden" style="margin-top:1rem"></div>
+                    </div>
+
+                    <div class="card" style="margin-top:1.5rem">
+                        <h3>NFC-Zuweisungen</h3>
+                        <table class="table" id="nfc-table">
+                            <thead>
+                                <tr><th>Mitarbeiter</th><th>NFC-UID</th><th>Aktionen</th></tr>
+                            </thead>
+                            <tbody id="nfc-tbody"></tbody>
+                        </table>
+                        <p id="nfc-empty" class="text-muted hidden">Keine NFC-Tags zugewiesen.</p>
                     </div>
                 </div>
             </div>

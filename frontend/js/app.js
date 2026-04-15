@@ -286,6 +286,22 @@ function setupSocket() {
             if (typeof loadPendingCorrections === 'function') loadPendingCorrections();
         }
     });
+
+    socket.on('nfc:assigned', async () => {
+        showToast('NFC zugewiesen', 'Tag wurde erfolgreich zugewiesen', 'success');
+        try {
+            allUsers = await apiFetch('/admin/users');
+            populateDeviceDropdowns();
+            renderNfcTable();
+            await loadDevices();
+            const statusEl = document.getElementById('assign-status');
+            if (statusEl) {
+                statusEl.className = 'alert alert-success';
+                statusEl.textContent = 'NFC-Tag erfolgreich zugewiesen!';
+                statusEl.classList.remove('hidden');
+            }
+        } catch {}
+    });
 }
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -1364,17 +1380,27 @@ window._reviewCorrection = async function(id, status) {
 // ── SCRUM-44: Geräte-Überwachung ─────────────────────────────
 
 let devicesRefreshTimer = null;
+let allDevicesData = [];
 
 async function loadDevicesPage() {
-    await loadDevices();
+    await Promise.all([loadDevices(), loadUsersForDevices()]);
+    populateDeviceDropdowns();
+    renderNfcTable();
+    setupNfcListeners();
     clearInterval(devicesRefreshTimer);
-    devicesRefreshTimer = setInterval(loadDevices, 30000);
+    devicesRefreshTimer = setInterval(loadDevices, 15000);
+}
+
+async function loadUsersForDevices() {
+    if (!allUsers.length) {
+        try { allUsers = await apiFetch('/admin/users'); } catch {}
+    }
 }
 
 async function loadDevices() {
     try {
-        const devices = await apiFetch('/admin/devices');
-        renderDevicesTable(devices);
+        allDevicesData = await apiFetch('/admin/devices');
+        renderDevicesTable(allDevicesData);
     } catch (err) {
         console.error('Fehler beim Laden der Geräte:', err);
     }
@@ -1419,10 +1445,120 @@ function renderDevicesTable(devices) {
                 <td>${esc(d.location || '–')}</td>
                 <td>${statusBadge}</td>
                 <td>${formatLastSeen(d.last_seen)}</td>
+                <td class="actions-cell">
+                    <button class="btn btn-sm ${d.active ? 'btn-danger' : 'btn-success'}" onclick="window._toggleDevice('${esc(d.id)}', ${d.active})">${d.active ? 'Deaktivieren' : 'Aktivieren'}</button>
+                    <button class="btn btn-sm btn-danger" onclick="window._deleteDevice('${esc(d.id)}', '${esc(d.name)}')">Löschen</button>
+                </td>
             </tr>
         `;
     }).join('');
 }
+
+function populateDeviceDropdowns() {
+    const deviceSelect = document.getElementById('assign-device');
+    const userSelect = document.getElementById('assign-user');
+    if (!deviceSelect || !userSelect) return;
+
+    deviceSelect.innerHTML = '<option value="">-- Gerät wählen --</option>' +
+        allDevicesData.filter(d => d.active).map(d => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('');
+
+    const usersWithoutNfc = allUsers.filter(u => u.active && !u.nfc_uid);
+    userSelect.innerHTML = '<option value="">-- Mitarbeiter wählen --</option>' +
+        usersWithoutNfc.map(u => `<option value="${u.id}">${esc(u.first_name)} ${esc(u.last_name)}</option>`).join('');
+}
+
+function renderNfcTable() {
+    const tbody = document.getElementById('nfc-tbody');
+    const empty = document.getElementById('nfc-empty');
+    const table = document.getElementById('nfc-table');
+    if (!tbody) return;
+    const usersWithNfc = allUsers.filter(u => u.nfc_uid);
+
+    if (!usersWithNfc.length) {
+        table.classList.add('hidden');
+        empty.classList.remove('hidden');
+        return;
+    }
+    table.classList.remove('hidden');
+    empty.classList.add('hidden');
+
+    tbody.innerHTML = usersWithNfc.map(u => `
+        <tr>
+            <td>${esc(u.first_name)} ${esc(u.last_name)}</td>
+            <td><code>${esc(u.nfc_uid)}</code></td>
+            <td><button class="btn btn-sm btn-danger" onclick="window._removeNfc(${u.id}, '${esc(u.first_name)} ${esc(u.last_name)}')">Entfernen</button></td>
+        </tr>
+    `).join('');
+}
+
+let nfcListenersSet = false;
+function setupNfcListeners() {
+    if (nfcListenersSet) return;
+    nfcListenersSet = true;
+
+    document.getElementById('btn-assign-nfc')?.addEventListener('click', async () => {
+        const deviceId = document.getElementById('assign-device').value;
+        const userId = document.getElementById('assign-user').value;
+        const statusEl = document.getElementById('assign-status');
+
+        if (!deviceId || !userId) {
+            statusEl.className = 'alert alert-error';
+            statusEl.textContent = 'Bitte Gerät und Mitarbeiter auswählen.';
+            statusEl.classList.remove('hidden');
+            return;
+        }
+
+        try {
+            await apiFetch(`/admin/devices/${deviceId}/assign`, {
+                method: 'PUT',
+                body: JSON.stringify({ userId: parseInt(userId) }),
+            });
+            statusEl.className = 'alert alert-success';
+            statusEl.textContent = 'Zuweisungsmodus aktiv — jetzt NFC-Karte an das Gerät halten.';
+            statusEl.classList.remove('hidden');
+        } catch (err) {
+            statusEl.className = 'alert alert-error';
+            statusEl.textContent = err.message;
+            statusEl.classList.remove('hidden');
+        }
+    });
+}
+
+window._toggleDevice = async function(id, currentActive) {
+    try {
+        await apiFetch(`/admin/devices/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ active: !currentActive }),
+        });
+        await loadDevices();
+        populateDeviceDropdowns();
+    } catch (err) {
+        alert('Fehler: ' + err.message);
+    }
+};
+
+window._deleteDevice = async function(id, name) {
+    if (!confirm(`Gerät "${name}" wirklich löschen?`)) return;
+    try {
+        await apiFetch(`/admin/devices/${id}`, { method: 'DELETE' });
+        await loadDevices();
+        populateDeviceDropdowns();
+    } catch (err) {
+        alert('Fehler: ' + err.message);
+    }
+};
+
+window._removeNfc = async function(userId, name) {
+    if (!confirm(`NFC-Tag von "${name}" wirklich entfernen?`)) return;
+    try {
+        await apiFetch(`/admin/users/${userId}/nfc`, { method: 'PUT' });
+        allUsers = await apiFetch('/admin/users');
+        populateDeviceDropdowns();
+        renderNfcTable();
+    } catch (err) {
+        alert('Fehler: ' + err.message);
+    }
+};
 
 const modalCreateDevice = document.getElementById('modal-create-device');
 const formCreateDevice = document.getElementById('form-create-device');

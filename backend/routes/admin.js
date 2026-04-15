@@ -208,6 +208,44 @@ router.put('/devices/:id/assign', auth, role('admin'), async (req, res) => {
     }
 });
 
+router.delete('/devices/:id', auth, role('admin'), async (req, res) => {
+    try {
+        await db.query('DELETE FROM devices WHERE id = ?', [req.params.id]);
+        res.json({ message: 'Gerät gelöscht' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+router.put('/devices/:id', auth, role('admin'), async (req, res) => {
+    try {
+        const { name, location, active } = req.body;
+        const fields = [];
+        const params = [];
+        if (name !== undefined) { fields.push('name = ?'); params.push(name); }
+        if (location !== undefined) { fields.push('location = ?'); params.push(location); }
+        if (active !== undefined) { fields.push('active = ?'); params.push(active ? 1 : 0); }
+        if (!fields.length) return res.status(400).json({ error: 'Keine Änderungen' });
+        params.push(req.params.id);
+        await db.query(`UPDATE devices SET ${fields.join(', ')} WHERE id = ?`, params);
+        res.json({ message: 'Gerät aktualisiert' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+router.put('/users/:id/nfc', auth, role('admin'), async (req, res) => {
+    try {
+        await db.query('UPDATE users SET nfc_uid = NULL WHERE id = ?', [req.params.id]);
+        res.json({ message: 'NFC-Tag entfernt' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
 // Work Rules
 router.get('/work-rules/:userId', auth, async (req, res) => {
     try {
