@@ -154,6 +154,7 @@ btnLogin.addEventListener('click', async () => {
         });
         setToken(data.token);
         currentUser = data.user;
+        connectSocket(data.token);
         showApp();
     } catch (err) {
         loginError.textContent = err.message;
@@ -167,6 +168,7 @@ loginPassword.addEventListener('keydown', (e) => {
 
 // ── Logout ──────────────────────────────────────────────────
 btnLogout.addEventListener('click', () => {
+    disconnectSocket();
     clearToken();
     currentUser = null;
     clearInterval(todayTimer);
@@ -197,6 +199,7 @@ window.addEventListener('auth:logout', (e) => {
     try {
         const data = await apiFetch('/auth/me');
         currentUser = data;
+        connectSocket(getToken());
         showApp();
     } catch {
         clearToken();
@@ -885,9 +888,16 @@ const statusLabels = {
 function openRequestModal() {
     newRequestError.classList.add('hidden');
     newRequestSuccess.classList.add('hidden');
+    document.getElementById('req-date-hint').classList.add('hidden');
     document.getElementById('req-type').value = 'urlaub';
-    document.getElementById('req-from').value = '';
-    document.getElementById('req-to').value = '';
+    // Heute als Mindestdatum setzen
+    const today = new Date().toISOString().split('T')[0];
+    const reqFrom = document.getElementById('req-from');
+    const reqTo   = document.getElementById('req-to');
+    reqFrom.value = '';
+    reqTo.value   = '';
+    reqFrom.min   = today;
+    reqTo.min     = today;
     document.getElementById('req-note').value = '';
     requestModal.classList.remove('hidden');
 }
@@ -901,17 +911,48 @@ btnCloseRequestModal.addEventListener('click', closeRequestModal);
 btnCancelRequestModal.addEventListener('click', closeRequestModal);
 document.querySelector('.modal-backdrop-request')?.addEventListener('click', closeRequestModal);
 
+// Datum-Von → Datum-Bis Mindest-Sync
+document.getElementById('req-from').addEventListener('change', () => {
+    const from = document.getElementById('req-from').value;
+    const reqTo = document.getElementById('req-to');
+    if (from) {
+        reqTo.min = from;
+        if (reqTo.value && reqTo.value < from) reqTo.value = from;
+    }
+    validateReqDates();
+});
+document.getElementById('req-to').addEventListener('change', validateReqDates);
+
+function validateReqDates() {
+    const from = document.getElementById('req-from').value;
+    const to   = document.getElementById('req-to').value;
+    const hint = document.getElementById('req-date-hint');
+    if (from && to && to < from) {
+        hint.textContent = 'Das Enddatum muss nach dem Startdatum liegen.';
+        hint.classList.remove('hidden');
+        return false;
+    }
+    hint.classList.add('hidden');
+    return true;
+}
+
 btnSubmitRequest.addEventListener('click', async () => {
     newRequestError.classList.add('hidden');
     newRequestSuccess.classList.add('hidden');
 
-    const type = document.getElementById('req-type').value;
+    const type     = document.getElementById('req-type').value;
     const dateFrom = document.getElementById('req-from').value;
-    const dateTo = document.getElementById('req-to').value;
-    const note = document.getElementById('req-note').value.trim();
+    const dateTo   = document.getElementById('req-to').value;
+    const note     = document.getElementById('req-note').value.trim();
 
+    // Client-seitige Validierung
     if (!dateFrom || !dateTo) {
         newRequestError.textContent = 'Bitte Start- und Enddatum angeben.';
+        newRequestError.classList.remove('hidden');
+        return;
+    }
+    if (dateTo < dateFrom) {
+        newRequestError.textContent = 'Das Enddatum muss nach dem Startdatum liegen.';
         newRequestError.classList.remove('hidden');
         return;
     }
@@ -924,14 +965,16 @@ btnSubmitRequest.addEventListener('click', async () => {
             method: 'POST',
             body: JSON.stringify({ type, dateFrom, dateTo, note: note || undefined }),
         });
-        newRequestSuccess.textContent = 'Antrag erfolgreich eingereicht!';
+        newRequestSuccess.textContent = 'Antrag erfolgreich eingereicht! Dein Vorgesetzter wurde benachrichtigt.';
         newRequestSuccess.classList.remove('hidden');
         await loadMyRequests();
+        await loadVacation();
         setTimeout(() => {
             closeRequestModal();
             newRequestSuccess.classList.add('hidden');
-        }, 1200);
+        }, 1800);
     } catch (err) {
+        // Überlappungsfehler vom Backend klar anzeigen
         newRequestError.textContent = err.message;
         newRequestError.classList.remove('hidden');
     } finally {
@@ -1138,3 +1181,103 @@ window._reviewRequest = async function(id, status) {
         alert('Fehler: ' + err.message);
     }
 };
+
+// ── WebSocket (Socket.IO) ────────────────────────────────────
+
+let socket = null;
+
+/**
+ * Toast-Benachrichtigung anzeigen
+ * @param {string} title
+ * @param {string} msg
+ * @param {'info'|'success'|'warning'} type
+ * @param {number} duration ms
+ */
+function showToast(title, msg, type = 'info', duration = 5000) {
+    const icons = { info: 'ℹ️', success: '✅', warning: '⚠️' };
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `
+        <span class="toast-icon">${icons[type] || 'ℹ️'}</span>
+        <div class="toast-body">
+            <div class="toast-title">${title}</div>
+            ${msg ? `<div class="toast-msg">${msg}</div>` : ''}
+        </div>
+    `;
+    container.appendChild(toast);
+
+    const remove = () => {
+        toast.classList.add('toast-exit');
+        toast.addEventListener('animationend', () => toast.remove(), { once: true });
+    };
+
+    const timer = setTimeout(remove, duration);
+    toast.addEventListener('click', () => { clearTimeout(timer); remove(); });
+}
+
+/**
+ * Socket.IO verbinden – wird nach erfolgreichem Login aufgerufen
+ */
+function connectSocket(token) {
+    if (socket) { socket.disconnect(); socket = null; }
+
+    socket = io({ auth: { token }, transports: ['websocket', 'polling'] });
+
+    socket.on('connect', () => {
+        console.log('[Socket] Verbunden:', socket.id);
+    });
+
+    socket.on('connect_error', (err) => {
+        console.warn('[Socket] Verbindungsfehler:', err.message);
+    });
+
+    // ── Neuer Antrag eines Mitarbeiters (für Vorgesetzte / Admin) ──
+    socket.on('request:new', (data) => {
+        const typeLabel = { urlaub: 'Urlaub', gleitzeit: 'Gleitzeit', homeoffice: 'Homeoffice', krank: 'Krank' };
+        const from = new Date(data.dateFrom).toLocaleDateString('de-DE');
+        const to   = new Date(data.dateTo).toLocaleDateString('de-DE');
+        const zeitraum = data.dateFrom === data.dateTo ? from : `${from} – ${to}`;
+        showToast(
+            `Neuer Antrag von ${data.userName}`,
+            `${typeLabel[data.type] || data.type} · ${zeitraum}`,
+            'info'
+        );
+        // Antragsverwaltung aktualisieren, wenn gerade geöffnet
+        if (window.location.hash === '#requests-overview') {
+            loadRequestsOverview();
+        }
+    });
+
+    // ── Antrag wurde bearbeitet (für den antragstellenden Mitarbeiter) ──
+    socket.on('request:reviewed', (data) => {
+        const statusLabel = data.status === 'approved' ? 'genehmigt ✅' : 'abgelehnt ❌';
+        const type = data.status === 'approved' ? 'success' : 'warning';
+        showToast(
+            `Dein Antrag wurde ${statusLabel}`,
+            `Bearbeitet von ${data.reviewerName}`,
+            type
+        );
+        // Dashboard-Anträge & Urlaubskonto aktualisieren
+        loadMyRequests();
+        loadVacation();
+    });
+
+    // ── Stempel-Update (für Team-Übersicht) ──
+    socket.on('stamp:update', () => {
+        if (window.location.hash === '#team') {
+            loadTeamPage();
+        }
+    });
+
+    socket.on('disconnect', () => {
+        console.log('[Socket] Getrennt');
+    });
+}
+
+/**
+ * Socket trennen – beim Logout aufrufen
+ */
+function disconnectSocket() {
+    if (socket) { socket.disconnect(); socket = null; }
+}
