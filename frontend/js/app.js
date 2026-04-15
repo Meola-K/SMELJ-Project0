@@ -154,7 +154,7 @@ btnLogin.addEventListener('click', async () => {
         });
         setToken(data.token);
         currentUser = data.user;
-        connectSocket(data.token);
+        setupSocket(data.token);
         showApp();
     } catch (err) {
         loginError.textContent = err.message;
@@ -168,12 +168,11 @@ loginPassword.addEventListener('keydown', (e) => {
 
 // ── Logout ──────────────────────────────────────────────────
 btnLogout.addEventListener('click', () => {
-    disconnectSocket();
+    if (socket) { socket.disconnect(); socket = null; }
     clearToken();
     currentUser = null;
     clearInterval(todayTimer);
     clearInterval(window._pendingBadgeTimer);
-    if (socket) { socket.disconnect(); socket = null; }
     appShell.classList.add('hidden');
     pageLogin.classList.remove('hidden');
     closeSidebar();
@@ -201,7 +200,7 @@ window.addEventListener('auth:logout', (e) => {
     try {
         const data = await apiFetch('/auth/me');
         currentUser = data;
-        connectSocket(getToken());
+        setupSocket(getToken());
         showApp();
     } catch {
         clearToken();
