@@ -72,6 +72,10 @@
                     <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                     <span>Verwaltung</span>
                 </a>
+                <a href="#devices" class="sidebar-link" data-route="devices" data-roles="admin">
+                    <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                    <span>Geräte</span>
+                </a>
             </nav>
 
             <div class="sidebar-footer">
@@ -432,6 +436,31 @@
                 </div>
             </div>
 
+            <!-- Devices Page (SCRUM-44) -->
+            <div id="page-devices" class="page hidden">
+                <div class="container">
+                    <div class="page-header">
+                        <h1>Geräte-Überwachung</h1>
+                        <button id="btn-open-create-device" class="btn btn-primary">+ Gerät registrieren</button>
+                    </div>
+                    <div class="card">
+                        <div id="devices-empty" class="text-muted hidden">Keine Geräte registriert.</div>
+                        <table class="table" id="devices-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Name</th>
+                                    <th>Standort</th>
+                                    <th>Status</th>
+                                    <th>Zuletzt gesehen</th>
+                                </tr>
+                            </thead>
+                            <tbody id="devices-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
         </main>
     </div>
 
@@ -555,6 +584,37 @@
                 <div class="modal-footer">
                     <button type="button" class="btn" id="btn-cancel-edit-modal">Abbrechen</button>
                     <button type="submit" class="btn btn-primary" id="btn-submit-edit">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-create-device" class="modal hidden">
+        <div class="modal-backdrop modal-backdrop-device"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Gerät registrieren</h2>
+                <button class="modal-close" id="btn-close-device-modal">&times;</button>
+            </div>
+            <div id="create-device-error" class="alert alert-error hidden"></div>
+            <div id="create-device-success" class="alert alert-success hidden"></div>
+            <form id="form-create-device">
+                <div class="form-group">
+                    <label for="cd-id">Geräte-ID *</label>
+                    <input type="text" id="cd-id" required placeholder="z.B. STEMPEL-01">
+                    <span class="form-hint">Eindeutige Kennung des Geräts</span>
+                </div>
+                <div class="form-group">
+                    <label for="cd-name">Name *</label>
+                    <input type="text" id="cd-name" required placeholder="z.B. Eingang Hauptgebäude">
+                </div>
+                <div class="form-group">
+                    <label for="cd-location">Standort</label>
+                    <input type="text" id="cd-location" placeholder="z.B. Erdgeschoss, Eingangshalle">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn" id="btn-cancel-device-modal">Abbrechen</button>
+                    <button type="submit" class="btn btn-primary" id="btn-submit-device">Registrieren</button>
                 </div>
             </form>
         </div>

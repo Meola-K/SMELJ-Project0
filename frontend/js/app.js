@@ -1281,3 +1281,204 @@ window._reviewRequest = async function(id, status) {
         alert('Fehler: ' + err.message);
     }
 };
+
+// ── SCRUM-163: Zeitkorrekturen verwalten ──────────────────────
+
+const correctionTypeLabels = { add: 'Hinzufügen', edit: 'Bearbeiten', delete: 'Löschen' };
+
+async function loadPendingCorrections() {
+    try {
+        const corrs = await apiFetch('/admin/corrections/pending');
+        renderPendingCorrections(corrs);
+    } catch (err) {
+        console.error('Fehler beim Laden der Korrekturen:', err);
+    }
+}
+
+function renderPendingCorrections(corrs) {
+    const tbody = document.getElementById('corrections-tbody');
+    const emptyEl = document.getElementById('corrections-empty');
+    const table = document.getElementById('corrections-table');
+    const badge = document.getElementById('corrections-count-badge');
+
+    if (badge) {
+        if (corrs.length > 0) {
+            badge.textContent = corrs.length;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    }
+
+    if (!tbody) return;
+
+    if (corrs.length === 0) {
+        table.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        return;
+    }
+    table.classList.remove('hidden');
+    emptyEl.classList.add('hidden');
+
+    tbody.innerHTML = corrs.map(c => {
+        const typeLabel = correctionTypeLabels[c.type] || c.type;
+        const stampLabel = c.stamp_type === 'in' ? 'Einstempeln' : c.stamp_type === 'out' ? 'Ausstempeln' : '';
+        const original = c.original_time
+            ? `${formatDate(c.original_time)} ${formatTime(c.original_time)}`
+            : '<span class="text-muted">–</span>';
+        const corrected = c.corrected_time
+            ? `${formatDate(c.corrected_time)} ${formatTime(c.corrected_time)}${stampLabel ? ` (${stampLabel})` : ''}`
+            : '<span class="text-muted">–</span>';
+        return `
+            <tr>
+                <td><strong>${esc(c.user_name)}</strong></td>
+                <td><span class="badge badge-pending">${typeLabel}</span></td>
+                <td>${original}</td>
+                <td>${corrected}</td>
+                <td>${esc(c.reason)}</td>
+                <td class="actions-cell">
+                    <button class="btn btn-sm btn-approve" onclick="window._reviewCorrection(${c.id}, 'approved')">Genehmigen</button>
+                    <button class="btn btn-sm btn-deny" onclick="window._reviewCorrection(${c.id}, 'denied')">Ablehnen</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+window._reviewCorrection = async function(id, status) {
+    const msg = status === 'approved'
+        ? 'Korrektur wirklich genehmigen? Der Stempel wird angepasst.'
+        : 'Korrektur wirklich ablehnen?';
+    if (!confirm(msg)) return;
+    try {
+        await apiFetch(`/admin/corrections/${id}/review`, {
+            method: 'PUT',
+            body: JSON.stringify({ status }),
+        });
+        await loadPendingCorrections();
+    } catch (err) {
+        alert('Fehler: ' + err.message);
+    }
+};
+
+// ── SCRUM-44: Geräte-Überwachung ─────────────────────────────
+
+let devicesRefreshTimer = null;
+
+async function loadDevicesPage() {
+    await loadDevices();
+    clearInterval(devicesRefreshTimer);
+    devicesRefreshTimer = setInterval(loadDevices, 30000);
+}
+
+async function loadDevices() {
+    try {
+        const devices = await apiFetch('/admin/devices');
+        renderDevicesTable(devices);
+    } catch (err) {
+        console.error('Fehler beim Laden der Geräte:', err);
+    }
+}
+
+function isDeviceOnline(lastSeen) {
+    if (!lastSeen) return false;
+    return (Date.now() - new Date(lastSeen).getTime()) <= 5 * 60 * 1000;
+}
+
+function formatLastSeen(lastSeen) {
+    if (!lastSeen) return '<span class="text-muted">Noch nie</span>';
+    const diffMin = Math.floor((Date.now() - new Date(lastSeen).getTime()) / 60000);
+    if (diffMin < 1) return 'Gerade eben';
+    if (diffMin < 60) return `vor ${diffMin} Min.`;
+    return `${formatDate(lastSeen)} ${formatTime(lastSeen)}`;
+}
+
+function renderDevicesTable(devices) {
+    const tbody = document.getElementById('devices-tbody');
+    const emptyEl = document.getElementById('devices-empty');
+    const table = document.getElementById('devices-table');
+    if (!tbody) return;
+
+    if (devices.length === 0) {
+        table.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        return;
+    }
+    table.classList.remove('hidden');
+    emptyEl.classList.add('hidden');
+
+    tbody.innerHTML = devices.map(d => {
+        const online = isDeviceOnline(d.last_seen);
+        const statusBadge = online
+            ? '<span class="badge badge-active">● Online</span>'
+            : '<span class="badge badge-inactive">● Offline</span>';
+        return `
+            <tr>
+                <td><code>${esc(d.id)}</code></td>
+                <td>${esc(d.name)}</td>
+                <td>${esc(d.location || '–')}</td>
+                <td>${statusBadge}</td>
+                <td>${formatLastSeen(d.last_seen)}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+const modalCreateDevice = document.getElementById('modal-create-device');
+const formCreateDevice = document.getElementById('form-create-device');
+
+function closeDeviceModal() {
+    if (modalCreateDevice) modalCreateDevice.classList.add('hidden');
+}
+
+document.getElementById('btn-open-create-device')?.addEventListener('click', () => {
+    formCreateDevice?.reset();
+    document.getElementById('create-device-error')?.classList.add('hidden');
+    document.getElementById('create-device-success')?.classList.add('hidden');
+    modalCreateDevice?.classList.remove('hidden');
+});
+
+document.getElementById('btn-close-device-modal')?.addEventListener('click', closeDeviceModal);
+document.getElementById('btn-cancel-device-modal')?.addEventListener('click', closeDeviceModal);
+document.querySelector('.modal-backdrop-device')?.addEventListener('click', closeDeviceModal);
+
+formCreateDevice?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('create-device-error');
+    const okEl = document.getElementById('create-device-success');
+    errEl.classList.add('hidden');
+    okEl.classList.add('hidden');
+
+    const payload = {
+        id: document.getElementById('cd-id').value.trim(),
+        name: document.getElementById('cd-name').value.trim(),
+        location: document.getElementById('cd-location').value.trim() || null,
+    };
+
+    if (!payload.id || !payload.name) {
+        errEl.textContent = 'ID und Name sind erforderlich.';
+        errEl.classList.remove('hidden');
+        return;
+    }
+
+    const btn = document.getElementById('btn-submit-device');
+    btn.disabled = true;
+    btn.textContent = 'Registriere...';
+
+    try {
+        await apiFetch('/admin/devices', { method: 'POST', body: JSON.stringify(payload) });
+        okEl.textContent = 'Gerät erfolgreich registriert!';
+        okEl.classList.remove('hidden');
+        formCreateDevice.reset();
+        await loadDevices();
+        setTimeout(() => { closeDeviceModal(); okEl.classList.add('hidden'); }, 1200);
+    } catch (err) {
+        errEl.textContent = err.message;
+        errEl.classList.remove('hidden');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Registrieren';
+    }
+});
+
+registerRoute('devices', { pageId: 'page-devices', onEnter: loadDevicesPage });
