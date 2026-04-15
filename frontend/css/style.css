@@ -1073,3 +1073,33 @@ body {
 
 .badge-stamp-in  { background: #dcfce7; color: #166534; }
 .badge-stamp-out { background: #fee2e2; color: #991b1b; }
+
+/* ── Sortierbare Spaltenköpfe ───────────────────────── */
+
+.th-sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s;
+}
+
+.th-sortable:hover {
+    color: var(--primary);
+}
+
+.th-sortable .sort-arrow {
+    display: inline-block;
+    font-size: 0.7rem;
+    margin-left: 0.3rem;
+    opacity: 0.4;
+    transition: opacity 0.15s, transform 0.15s;
+}
+
+.th-sortable.th-sort-asc .sort-arrow,
+.th-sortable.th-sort-desc .sort-arrow {
+    opacity: 1;
+    color: var(--primary);
+}
+
+.th-sortable.th-sort-asc .sort-arrow {
+    transform: rotate(180deg);
+}

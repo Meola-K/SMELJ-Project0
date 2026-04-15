@@ -474,7 +474,19 @@ async function loadHistory() {
 
 btnLoadHistory.addEventListener('click', loadHistory);
 
+// ── History Sort ─────────────────────────────────────────────
+let historySortDir = 'desc'; // Standard: Datum absteigend
+let historyStampsCache = [];  // Stempel zwischenspeichern für Umsortierung
+
+const thSortDate = document.getElementById('th-sort-date');
+thSortDate.addEventListener('click', () => {
+    historySortDir = historySortDir === 'desc' ? 'asc' : 'desc';
+    thSortDate.className = `th-sortable th-sort-${historySortDir}`;
+    renderHistory(historyStampsCache);
+});
+
 function renderHistory(stamps) {
+    historyStampsCache = stamps;
     const days = {};
     stamps.forEach(s => {
         const day = new Date(s.stamp_time).toISOString().split('T')[0];
@@ -483,7 +495,8 @@ function renderHistory(stamps) {
     });
 
     const rows = [];
-    const sortedDays = Object.keys(days).sort().reverse();
+    const sortedDays = Object.keys(days).sort();
+    if (historySortDir === 'desc') sortedDays.reverse();
 
     sortedDays.forEach(day => {
         const entries = days[day];
