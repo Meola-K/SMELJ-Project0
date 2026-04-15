@@ -172,6 +172,8 @@ btnLogout.addEventListener('click', () => {
     clearToken();
     currentUser = null;
     clearInterval(todayTimer);
+    clearInterval(window._pendingBadgeTimer);
+    if (socket) { socket.disconnect(); socket = null; }
     appShell.classList.add('hidden');
     pageLogin.classList.remove('hidden');
     closeSidebar();
@@ -214,8 +216,64 @@ function showApp() {
     updateSidebarUser();
     updateSidebarForRole(currentUser.role);
 
+    if (currentUser.role === 'admin' || currentUser.role === 'vorgesetzter') {
+        updateSidebarPendingBadge();
+        clearInterval(window._pendingBadgeTimer);
+        window._pendingBadgeTimer = setInterval(updateSidebarPendingBadge, 30000);
+    }
+
+    setupSocket();
+
     // Router starten (setzt auch die initiale Route)
     startRouter('dashboard');
+}
+
+async function updateSidebarPendingBadge() {
+    try {
+        const reqs = await apiFetch('/requests/pending');
+        const badge = document.getElementById('sidebar-pending-badge');
+        if (!badge) return;
+        if (reqs.length > 0) {
+            badge.textContent = reqs.length;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    } catch {}
+}
+
+function showToast(title, body, type = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `<div class="toast-title">${esc(title)}</div>${body ? `<div class="toast-body">${esc(body)}</div>` : ''}`;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.transition = 'opacity 0.3s';
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 5000);
+}
+
+let socket = null;
+function setupSocket() {
+    if (typeof io === 'undefined') return;
+    if (socket) socket.disconnect();
+    socket = io({ auth: { token: getToken() } });
+
+    socket.on('request:reviewed', (data) => {
+        const statusLabel = data.status === 'approved' ? 'genehmigt' : 'abgelehnt';
+        const type = data.status === 'approved' ? 'success' : 'error';
+        showToast(`Antrag ${statusLabel}`, `Bearbeitet von ${data.reviewerName}`, type);
+    });
+
+    socket.on('request:new', () => {
+        if (currentUser.role === 'admin' || currentUser.role === 'vorgesetzter') {
+            updateSidebarPendingBadge();
+            showToast('Neuer Antrag', 'Ein Mitarbeiter hat einen neuen Antrag eingereicht', 'info');
+        }
+    });
 }
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -314,14 +372,30 @@ function renderTodayStamps(stamps) {
         return;
     }
     const sourceLabel = { web: 'Web', arduino: 'NFC', app: 'App' };
-    todayStampsList.innerHTML = stamps.map(s => `
-        <div class="stamp-entry">
-            <div class="stamp-entry-icon ${s.type}"></div>
-            <span class="stamp-entry-time">${formatTime(s.stamp_time)}</span>
-            <span class="stamp-entry-label">${s.type === 'in' ? 'Einstempeln' : 'Ausstempeln'}</span>
-            <span class="stamp-entry-source">${sourceLabel[s.source] || s.source || ''}</span>
-        </div>
-    `).join('');
+    todayStampsList.innerHTML = `
+        <table class="table stamps-table">
+            <thead>
+                <tr>
+                    <th>Typ</th>
+                    <th>Uhrzeit</th>
+                    <th>Quelle</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${stamps.map(s => `
+                    <tr>
+                        <td>
+                            <span class="badge ${s.type === 'in' ? 'badge-stamp-in' : 'badge-stamp-out'}">
+                                ${s.type === 'in' ? 'Einstempeln' : 'Ausstempeln'}
+                            </span>
+                        </td>
+                        <td class="stamp-time-cell">${formatTime(s.stamp_time)}</td>
+                        <td>${sourceLabel[s.source] || s.source || '–'}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
 }
 
 btnStamp.addEventListener('click', async () => {
@@ -1175,8 +1249,8 @@ window._reviewRequest = async function(id, status) {
             method: 'PUT',
             body: JSON.stringify({ status }),
         });
-        // Beide Listen neu laden
         await loadRequestsOverview();
+        updateSidebarPendingBadge();
     } catch (err) {
         alert('Fehler: ' + err.message);
     }
