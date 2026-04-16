@@ -131,6 +131,50 @@ router.delete('/users/:id', auth, role('admin'), async (req, res) => {
     }
 });
 
+// DSGVO Art. 17 – Personenbezogene Daten anonymisieren
+// Arbeitszeitdaten bleiben erhalten (Aufbewahrungspflicht §16 ArbZG: 2 Jahre,
+// lohnrelevante Daten §41 EStG/§257 HGB: 6 Jahre), aber ohne Personenbezug.
+router.delete('/users/:id/gdpr', auth, role('admin'), async (req, res) => {
+    try {
+        const userId = parseInt(req.params.id);
+        if (userId === req.user.id) return res.status(400).json({ error: 'Eigenen Account nicht löschbar' });
+
+        const [user] = await db.query('SELECT active FROM users WHERE id = ?', [userId]);
+        if (!user.length) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+        if (user[0].active) return res.status(400).json({ error: 'Benutzer muss zuerst deaktiviert werden' });
+
+        // Personenbezogene Daten im User anonymisieren
+        await db.query(
+            `UPDATE users SET
+                email = CONCAT('geloescht_', id, '@anonym.local'),
+                password = 'ANONYMIZED',
+                first_name = 'Gelöscht',
+                last_name = CONCAT('Nutzer-', id),
+                nfc_uid = NULL
+            WHERE id = ?`,
+            [userId]
+        );
+
+        // Notizen in Anträgen entfernen (können Gesundheitsdaten enthalten)
+        await db.query('UPDATE requests SET note = NULL WHERE user_id = ?', [userId]);
+
+        // Begründungen in Korrekturen entfernen
+        await db.query(
+            "UPDATE corrections SET reason = 'Anonymisiert (DSGVO)' WHERE user_id = ?",
+            [userId]
+        );
+
+        // Konfiguration löschen (keine Aufbewahrungspflicht)
+        await db.query('DELETE FROM work_rules WHERE user_id = ?', [userId]);
+        await db.query('DELETE FROM time_limits WHERE user_id = ?', [userId]);
+
+        res.json({ message: 'Personenbezogene Daten anonymisiert. Arbeitszeitdaten bleiben aufbewahrungspflichtig erhalten.' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
 // Groups
 router.get('/groups', auth, role('admin'), async (req, res) => {
     try {
