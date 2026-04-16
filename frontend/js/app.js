@@ -93,12 +93,16 @@ function openSidebar() {
     sidebar.classList.add('is-open');
     sidebarOverlay.classList.remove('hidden');
     btnHamburger.classList.add('is-active');
+    btnHamburger.setAttribute('aria-expanded', 'true');
+    btnHamburger.setAttribute('aria-label', 'Menü schließen');
 }
 
 function closeSidebar() {
     sidebar.classList.remove('is-open');
     sidebarOverlay.classList.add('hidden');
     btnHamburger.classList.remove('is-active');
+    btnHamburger.setAttribute('aria-expanded', 'false');
+    btnHamburger.setAttribute('aria-label', 'Menü öffnen');
 }
 
 btnHamburger.addEventListener('click', () => {
@@ -142,7 +146,9 @@ registerRoute('requests-overview', {
 });
 
 // ── Login ───────────────────────────────────────────────────
-btnLogin.addEventListener('click', async () => {
+const formLogin = document.getElementById('form-login');
+formLogin.addEventListener('submit', async (e) => {
+    e.preventDefault();
     loginError.classList.add('hidden');
     try {
         const data = await apiFetch('/auth/login', {
@@ -159,11 +165,8 @@ btnLogin.addEventListener('click', async () => {
     } catch (err) {
         loginError.textContent = err.message;
         loginError.classList.remove('hidden');
+        loginError.focus();
     }
-});
-
-loginPassword.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') btnLogin.click();
 });
 
 // ── Logout ──────────────────────────────────────────────────
@@ -246,6 +249,7 @@ function showToast(title, body, type = 'info') {
     if (!container) return;
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
+    toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
     toast.innerHTML = `<div class="toast-title">${esc(title)}</div>${body ? `<div class="toast-body">${esc(body)}</div>` : ''}`;
     container.appendChild(toast);
     setTimeout(() => {
@@ -320,7 +324,8 @@ function formatTime(dateStr) {
 
 function formatDate(dateStr) {
     const d = new Date(dateStr);
-    return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+    const yy = String(d.getFullYear()).slice(-2);
+    return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${yy}`;
 }
 
 function esc(str) {
@@ -329,6 +334,121 @@ function esc(str) {
     div.textContent = str;
     return div.innerHTML;
 }
+
+// ── Datums-Konvertierung dd.mm.yy <-> ISO ─────────────────────
+function isoToDisplay(isoStr) {
+    // "2026-04-16" -> "16.04.26"
+    if (!isoStr) return '';
+    const [y, m, d] = isoStr.split('-');
+    return `${d}.${m}.${y.slice(-2)}`;
+}
+
+function displayToIso(displayStr) {
+    // "16.04.26" -> "2026-04-16"
+    if (!displayStr) return '';
+    const parts = displayStr.split('.');
+    if (parts.length !== 3) return '';
+    const [d, m, yy] = parts;
+    const fullYear = parseInt(yy) < 70 ? `20${yy}` : `19${yy}`;
+    return `${fullYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+}
+
+// Auto-Punkt-Einfügung bei Datumseingabe
+function setupDateInput(inputEl) {
+    inputEl.addEventListener('input', () => {
+        let v = inputEl.value.replace(/[^\d.]/g, '');
+        // Auto-Punkt nach dd und mm
+        if (v.length === 2 && !v.includes('.')) v += '.';
+        else if (v.length === 5 && v.indexOf('.') === 2 && v.lastIndexOf('.') === 2) v += '.';
+        if (v.length > 8) v = v.slice(0, 8);
+        inputEl.value = v;
+    });
+}
+
+// Alle Datums-Inputs initialisieren
+document.querySelectorAll('input[pattern="\\d{2}\\.\\d{2}\\.\\d{2}"]').forEach(setupDateInput);
+
+// Kalender-Buttons mit Text-Inputs verbinden
+document.querySelectorAll('.date-input-wrap').forEach(wrap => {
+    const textInput = wrap.querySelector('input[type="text"]');
+    const datePicker = wrap.querySelector('.date-picker-hidden');
+    const btn = wrap.querySelector('.btn-date-picker');
+    if (!textInput || !datePicker || !btn) return;
+
+    btn.addEventListener('click', () => {
+        // Aktuellen Wert ins Date-Input übernehmen
+        const iso = displayToIso(textInput.value);
+        if (iso) datePicker.value = iso;
+        datePicker.showPicker();
+    });
+
+    datePicker.addEventListener('change', () => {
+        if (datePicker.value) {
+            textInput.value = isoToDisplay(datePicker.value);
+            textInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    });
+});
+
+// ── Barrierefreiheit: Modal Focus-Trap & ESC ──────────────────
+let lastFocusedElement = null;
+
+function trapFocus(modalEl) {
+    const focusable = modalEl.querySelectorAll(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), a[href]'
+    );
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    first.focus();
+
+    modalEl._trapHandler = (e) => {
+        if (e.key !== 'Tab') return;
+        if (e.shiftKey) {
+            if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+        } else {
+            if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+    };
+    modalEl.addEventListener('keydown', modalEl._trapHandler);
+}
+
+function releaseFocus(modalEl) {
+    if (modalEl._trapHandler) {
+        modalEl.removeEventListener('keydown', modalEl._trapHandler);
+        delete modalEl._trapHandler;
+    }
+    if (lastFocusedElement) {
+        lastFocusedElement.focus();
+        lastFocusedElement = null;
+    }
+}
+
+function openModalA11y(modalEl) {
+    lastFocusedElement = document.activeElement;
+    modalEl.classList.remove('hidden');
+    trapFocus(modalEl);
+}
+
+function closeModalA11y(modalEl) {
+    modalEl.classList.add('hidden');
+    releaseFocus(modalEl);
+}
+
+// Globaler ESC-Handler für alle Modals
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const openModals = document.querySelectorAll('.modal:not(.hidden)');
+    if (openModals.length) {
+        const topModal = openModals[openModals.length - 1];
+        closeModalA11y(topModal);
+    }
+    // Sidebar schließen bei ESC
+    if (sidebar.classList.contains('is-open')) {
+        closeSidebar();
+        btnHamburger.focus();
+    }
+});
 
 // ── Dashboard ───────────────────────────────────────────────
 async function loadDashboard() {
@@ -341,8 +461,8 @@ async function loadDashboard() {
 
         const now = new Date();
         const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        historyFrom.value = firstOfMonth.toISOString().split('T')[0];
-        historyTo.value = now.toISOString().split('T')[0];
+        historyFrom.value = isoToDisplay(firstOfMonth.toISOString().split('T')[0]);
+        historyTo.value = isoToDisplay(now.toISOString().split('T')[0]);
         loadHistory();
         loadVacation();
         loadMyRequests();
@@ -478,8 +598,8 @@ btnStamp.addEventListener('click', async () => {
 
 // ── History ─────────────────────────────────────────────────
 async function loadHistory() {
-    const from = historyFrom.value;
-    const to = historyTo.value;
+    const from = displayToIso(historyFrom.value);
+    const to = displayToIso(historyTo.value);
     if (!from || !to) return;
 
     try {
@@ -500,6 +620,7 @@ const thSortDate = document.getElementById('th-sort-date');
 thSortDate.addEventListener('click', () => {
     historySortDir = historySortDir === 'desc' ? 'asc' : 'desc';
     thSortDate.className = `th-sortable th-sort-${historySortDir}`;
+    thSortDate.setAttribute('aria-sort', historySortDir === 'desc' ? 'descending' : 'ascending');
     renderHistory(historyStampsCache);
 });
 
@@ -614,7 +735,7 @@ btnOpenModal.addEventListener('click', () => {
     cuEmailHint.textContent = '';
     cuEmailHint.className = 'form-hint';
     populateDropdowns();
-    modal.classList.remove('hidden');
+    openModalA11y(modal);
 });
 
 btnCloseModal.addEventListener('click', closeModal);
@@ -622,7 +743,7 @@ btnCancelModal.addEventListener('click', closeModal);
 document.querySelector('.modal-backdrop')?.addEventListener('click', closeModal);
 
 function closeModal() {
-    modal.classList.add('hidden');
+    closeModalA11y(modal);
 }
 
 let emailCheckTimer = null;
@@ -745,7 +866,7 @@ window._editUser = function (id) {
             euSupervisor.innerHTML += `<option value="${u.id}"${u.id === user.supervisor_id ? ' selected' : ''}>${esc(u.first_name)} ${esc(u.last_name)}</option>`;
         });
 
-    editModal.classList.remove('hidden');
+    openModalA11y(editModal);
 };
 
 document.getElementById('btn-close-edit-modal').addEventListener('click', closeEditModal);
@@ -753,7 +874,7 @@ document.getElementById('btn-cancel-edit-modal').addEventListener('click', close
 document.querySelector('.modal-backdrop-edit')?.addEventListener('click', closeEditModal);
 
 function closeEditModal() {
-    editModal.classList.add('hidden');
+    closeModalA11y(editModal);
 }
 
 let editEmailTimer = null;
@@ -877,6 +998,8 @@ async function loadVacation() {
         document.getElementById('vacation-remaining').textContent = data.remainingDays;
         const pct = data.totalDays > 0 ? Math.min((data.usedDays / data.totalDays) * 100, 100) : 0;
         document.getElementById('vacation-bar').style.width = `${pct}%`;
+        const barWrap = document.getElementById('vacation-bar-wrap');
+        if (barWrap) barWrap.setAttribute('aria-valuenow', Math.round(pct));
         const pendingEl = document.getElementById('vacation-pending-text');
         pendingEl.textContent = data.pendingRequests > 0 ? `${data.pendingRequests} offene(r) Urlaubsantrag/-anträge` : '';
     } catch (err) { console.error(err); }
@@ -1005,20 +1128,16 @@ function openRequestModal() {
     newRequestSuccess.classList.add('hidden');
     document.getElementById('req-date-hint').classList.add('hidden');
     document.getElementById('req-type').value = 'urlaub';
-    // Heute als Mindestdatum setzen
-    const today = new Date().toISOString().split('T')[0];
     const reqFrom = document.getElementById('req-from');
     const reqTo   = document.getElementById('req-to');
     reqFrom.value = '';
     reqTo.value   = '';
-    reqFrom.min   = today;
-    reqTo.min     = today;
     document.getElementById('req-note').value = '';
-    requestModal.classList.remove('hidden');
+    openModalA11y(requestModal);
 }
 
 function closeRequestModal() {
-    requestModal.classList.add('hidden');
+    closeModalA11y(requestModal);
 }
 
 btnNewRequest.addEventListener('click', openRequestModal);
@@ -1026,23 +1145,17 @@ btnCloseRequestModal.addEventListener('click', closeRequestModal);
 btnCancelRequestModal.addEventListener('click', closeRequestModal);
 document.querySelector('.modal-backdrop-request')?.addEventListener('click', closeRequestModal);
 
-// Datum-Von → Datum-Bis Mindest-Sync
-document.getElementById('req-from').addEventListener('change', () => {
-    const from = document.getElementById('req-from').value;
-    const reqTo = document.getElementById('req-to');
-    if (from) {
-        reqTo.min = from;
-        if (reqTo.value && reqTo.value < from) reqTo.value = from;
-    }
-    validateReqDates();
-});
-document.getElementById('req-to').addEventListener('change', validateReqDates);
+// Datum-Von → Datum-Bis Validierung
+document.getElementById('req-from').addEventListener('input', validateReqDates);
+document.getElementById('req-to').addEventListener('input', validateReqDates);
 
 function validateReqDates() {
-    const from = document.getElementById('req-from').value;
-    const to   = document.getElementById('req-to').value;
+    const fromStr = document.getElementById('req-from').value;
+    const toStr   = document.getElementById('req-to').value;
     const hint = document.getElementById('req-date-hint');
-    if (from && to && to < from) {
+    const fromIso = displayToIso(fromStr);
+    const toIso   = displayToIso(toStr);
+    if (fromIso && toIso && toIso < fromIso) {
         hint.textContent = 'Das Enddatum muss nach dem Startdatum liegen.';
         hint.classList.remove('hidden');
         return false;
@@ -1056,13 +1169,13 @@ btnSubmitRequest.addEventListener('click', async () => {
     newRequestSuccess.classList.add('hidden');
 
     const type     = document.getElementById('req-type').value;
-    const dateFrom = document.getElementById('req-from').value;
-    const dateTo   = document.getElementById('req-to').value;
+    const dateFrom = displayToIso(document.getElementById('req-from').value);
+    const dateTo   = displayToIso(document.getElementById('req-to').value);
     const note     = document.getElementById('req-note').value.trim();
 
     // Client-seitige Validierung
     if (!dateFrom || !dateTo) {
-        newRequestError.textContent = 'Bitte Start- und Enddatum angeben.';
+        newRequestError.textContent = 'Bitte Start- und Enddatum im Format dd.mm.yy angeben.';
         newRequestError.classList.remove('hidden');
         return;
     }
@@ -1154,15 +1267,33 @@ window._withdrawRequest = async function(id) {
 let allRequestsData = [];   // cache für client-seitiges Filtern
 let pendingRequestsData = [];
 
-// Tab-Switching
+// Tab-Switching (mit ARIA-Unterstützung)
 document.querySelectorAll('.req-tab').forEach(tab => {
     tab.addEventListener('click', () => {
-        document.querySelectorAll('.req-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.req-tab').forEach(t => {
+            t.classList.remove('active');
+            t.setAttribute('aria-selected', 'false');
+        });
         tab.classList.add('active');
+        tab.setAttribute('aria-selected', 'true');
         const target = tab.dataset.tab;
         document.getElementById('req-panel-pending').classList.toggle('hidden', target !== 'pending');
         document.getElementById('req-panel-all').classList.toggle('hidden', target !== 'all');
         document.getElementById('req-panel-corrections').classList.toggle('hidden', target !== 'corrections');
+    });
+
+    // Pfeiltasten-Navigation für Tabs
+    tab.addEventListener('keydown', (e) => {
+        const tabs = Array.from(document.querySelectorAll('.req-tab'));
+        const idx = tabs.indexOf(tab);
+        let newIdx = -1;
+        if (e.key === 'ArrowRight') newIdx = (idx + 1) % tabs.length;
+        else if (e.key === 'ArrowLeft') newIdx = (idx - 1 + tabs.length) % tabs.length;
+        if (newIdx >= 0) {
+            e.preventDefault();
+            tabs[newIdx].focus();
+            tabs[newIdx].click();
+        }
     });
 });
 
@@ -1564,14 +1695,14 @@ const modalCreateDevice = document.getElementById('modal-create-device');
 const formCreateDevice = document.getElementById('form-create-device');
 
 function closeDeviceModal() {
-    if (modalCreateDevice) modalCreateDevice.classList.add('hidden');
+    if (modalCreateDevice) closeModalA11y(modalCreateDevice);
 }
 
 document.getElementById('btn-open-create-device')?.addEventListener('click', () => {
     formCreateDevice?.reset();
     document.getElementById('create-device-error')?.classList.add('hidden');
     document.getElementById('create-device-success')?.classList.add('hidden');
-    modalCreateDevice?.classList.remove('hidden');
+    if (modalCreateDevice) openModalA11y(modalCreateDevice);
 });
 
 document.getElementById('btn-close-device-modal')?.addEventListener('click', closeDeviceModal);

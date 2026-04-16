@@ -31,6 +31,71 @@ body {
     line-height: 1.5;
 }
 
+/* ── Barrierefreiheit ──────────────────────────────── */
+
+.skip-link {
+    position: absolute;
+    top: -100%;
+    left: 1rem;
+    z-index: 10000;
+    padding: 0.75rem 1.5rem;
+    background: var(--primary);
+    color: #fff;
+    font-weight: 600;
+    border-radius: var(--radius);
+    text-decoration: none;
+    transition: top 0.2s;
+}
+
+.skip-link:focus {
+    top: 1rem;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ── Focus-Styles ──────────────────────────────────── */
+
+:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.btn:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2);
+}
+
+.sidebar-link:focus-visible {
+    outline: 2px solid var(--sidebar-active-text);
+    outline-offset: -2px;
+}
+
+.modal-close:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* ── Reduzierte Bewegung ───────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
 /* ── App Shell Layout ───────────────────────────────── */
 
 .app-shell {
@@ -437,7 +502,8 @@ body {
     border-radius: var(--radius);
 }
 
-.login-card h2 { margin-bottom: 1.25rem; }
+.login-card h1, .login-card h2 { margin-bottom: 1.25rem; }
+.login-card h1 { font-size: 1.5rem; }
 
 /* ── Forms ──────────────────────────────────────────── */
 
@@ -779,11 +845,72 @@ body {
     gap: 0.5rem;
 }
 
-.history-filter input[type="date"] {
+.history-filter input[type="date"],
+.history-filter input[type="text"] {
     padding: 0.3rem 0.5rem;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     font-size: 0.8rem;
+}
+
+/* ── Datum-Input mit Kalender-Button ───────────────── */
+
+.date-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.date-input-wrap input[type="text"] {
+    padding-right: 2rem;
+    min-width: 9.5em;
+}
+
+.date-picker-hidden {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.btn-date-picker {
+    position: absolute;
+    right: 1px;
+    top: 1px;
+    bottom: 1px;
+    width: 2rem;
+    background: var(--bg);
+    border: none;
+    border-left: 1px solid var(--border);
+    border-radius: 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0;
+    cursor: pointer;
+    padding: 0;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s, background 0.15s;
+}
+
+.btn-date-picker:hover {
+    color: var(--primary);
+    background: rgba(37, 99, 235, 0.08);
+}
+
+.btn-date-picker:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 1px;
+}
+
+/* In Formularen volle Breite */
+.form-group .date-input-wrap {
+    width: 100%;
+}
+
+.form-group .date-input-wrap input[type="text"] {
+    width: 100%;
 }
 
 .history-filter span {
