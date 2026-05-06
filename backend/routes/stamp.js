@@ -131,7 +131,15 @@ router.post('/', auth, async (req, res) => {
         };
 
         const io = req.app.get('io');
-        if (io) io.emit('stamp:update', { userId, ...result });
+        if (io) {
+            const payload = { userId, ...result };
+            io.to(`user-${userId}`).emit('stamp:update', payload);
+            io.to('admins').emit('stamp:update', payload);
+            const [supRows] = await db.query('SELECT supervisor_id FROM users WHERE id = ?', [userId]);
+            if (supRows[0]?.supervisor_id) {
+                io.to(`user-${supRows[0].supervisor_id}`).emit('stamp:update', payload);
+            }
+        }
 
         res.json(result);
     } catch (err) {
@@ -203,7 +211,14 @@ router.post('/nfc', async (req, res) => {
         };
 
         const io = req.app.get('io');
-        if (io) io.emit('stamp:update', { userId: user.id, ...result });
+        if (io) {
+            const payload = { userId: user.id, ...result };
+            io.to(`user-${user.id}`).emit('stamp:update', payload);
+            io.to('admins').emit('stamp:update', payload);
+            if (user.supervisor_id) {
+                io.to(`user-${user.supervisor_id}`).emit('stamp:update', payload);
+            }
+        }
 
         res.json(result);
     } catch (err) {

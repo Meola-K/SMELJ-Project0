@@ -62,6 +62,8 @@ let allUsers = [];
 let allGroups = [];
 let isStampedIn = false;
 let todayTimer = null;
+let liveBaseMinutes = 0;
+let liveBaseTimestamp = 0;
 
 // ── Rollenbasierte Navigation ───────────────────────────────
 const roleLabelsMap = { admin: 'Admin', vorgesetzter: 'Vorgesetzter', arbeiter: 'Mitarbeiter' };
@@ -86,6 +88,7 @@ onNavigate((routeName) => {
     sidebarNav.querySelectorAll('.sidebar-link').forEach(link => {
         link.classList.toggle('active', link.dataset.route === routeName);
     });
+    if (routeName !== 'dashboard') clearInterval(todayTimer);
 });
 
 // ── Mobile Sidebar Toggle ───────────────────────────────────
@@ -291,6 +294,14 @@ function setupSocket() {
         }
     });
 
+    socket.on('stamp:update', (data) => {
+        if (!currentUser || data.userId === currentUser.id) return;
+        if (currentUser.role !== 'admin' && currentUser.role !== 'vorgesetzter') return;
+        const fullName = `${data.user?.firstName ?? ''} ${data.user?.lastName ?? ''}`.trim() || 'Mitarbeiter';
+        const action = data.type === 'in' ? 'eingestempelt' : 'ausgestempelt';
+        showToast('Stempel-Update', `${fullName} hat sich ${action}`, 'info');
+    });
+
     socket.on('nfc:assigned', async () => {
         showToast('NFC zugewiesen', 'Tag wurde erfolgreich zugewiesen', 'success');
         try {
@@ -309,9 +320,10 @@ function setupSocket() {
 }
 
 // ── Helpers ─────────────────────────────────────────────────
-function formatMinutes(mins) {
-    const sign = mins < 0 ? '-' : '';
-    const abs = Math.abs(Math.floor(mins));
+function formatMinutes(mins, withSign = false) {
+    const intMins = Math.floor(mins);
+    const sign = intMins < 0 ? '-' : (withSign ? '+' : '');
+    const abs = Math.abs(intMins);
     const h = Math.floor(abs / 60);
     const m = abs % 60;
     return `${sign}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
@@ -451,6 +463,19 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ── Dashboard ───────────────────────────────────────────────
+function startTodayTicker() {
+    clearInterval(todayTimer);
+    todayTimer = setInterval(() => {
+        const live = liveBaseMinutes + (Date.now() - liveBaseTimestamp) / 60000;
+        todayMinutesEl.textContent = formatMinutes(live);
+    }, 1000);
+}
+
+function stopTodayTicker() {
+    clearInterval(todayTimer);
+    todayTimer = null;
+}
+
 async function loadDashboard() {
     try {
         const data = await apiFetch('/stamp/today');
@@ -467,16 +492,8 @@ async function loadDashboard() {
         loadVacation();
         loadMyRequests();
 
-        clearInterval(todayTimer);
-        if (isStampedIn) {
-            todayTimer = setInterval(async () => {
-                try {
-                    const fresh = await apiFetch('/stamp/today');
-                    const freshLast = fresh.stamps && fresh.stamps.length ? fresh.stamps[fresh.stamps.length - 1] : null;
-                    updateStampUI(fresh.todayMinutes, fresh.balance, freshLast);
-                } catch {}
-            }, 30000);
-        }
+        if (isStampedIn) startTodayTicker();
+        else stopTodayTicker();
     } catch (err) {
         console.error(err);
     }
@@ -489,8 +506,10 @@ function updateStampUI(todayMins, balance, lastStamp) {
     btnStampText.textContent = isStampedIn ? 'Ausstempeln' : 'Einstempeln';
     btnStamp.className = `btn btn-stamp ${isStampedIn ? 'stamp-out' : 'stamp-in'}`;
     todayMinutesEl.textContent = formatMinutes(todayMins);
-    monthBalanceEl.textContent = formatMinutes(balance);
+    monthBalanceEl.textContent = formatMinutes(balance, true);
     monthBalanceEl.className = `stamp-info-value ${balance >= 0 ? 'positive' : 'negative'}`;
+    liveBaseMinutes = todayMins;
+    liveBaseTimestamp = Date.now();
 
     if (lastStamp) {
         const time = formatTime(lastStamp.stamp_time);
@@ -578,16 +597,8 @@ btnStamp.addEventListener('click', async () => {
         updateStampUI(fresh.todayMinutes, fresh.balance, freshLast);
         renderTodayStamps(fresh.stamps);
 
-        clearInterval(todayTimer);
-        if (isStampedIn) {
-            todayTimer = setInterval(async () => {
-                try {
-                    const f = await apiFetch('/stamp/today');
-                    const fLast = f.stamps && f.stamps.length ? f.stamps[f.stamps.length - 1] : null;
-                    updateStampUI(f.todayMinutes, f.balance, fLast);
-                } catch {}
-            }, 30000);
-        }
+        if (isStampedIn) startTodayTicker();
+        else stopTodayTicker();
     } catch (err) {
         stampSpinner.classList.add('hidden');
         showStampWarning('Fehler: ' + err.message);
