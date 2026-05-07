@@ -1237,3 +1237,33 @@ body {
 .th-sortable.th-sort-asc .sort-arrow {
     transform: rotate(180deg);
 }
+
+/* ── Antragstyp-Farben (Sonderurlaub-Ticket) ─────────────────
+   Eigene Farb-Badges für jeden Antragstyp – Sonderurlaub = orange
+   Wird auch als Vorlage für eine spätere Kalenderansicht verwendet. */
+.badge-type {
+    font-weight: 600;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+.type-urlaub        { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+.type-gleitzeit     { background: #ede9fe; color: #5b21b6; border-color: #c4b5fd; }
+.type-homeoffice    { background: #dcfce7; color: #166534; border-color: #86efac; }
+.type-krank         { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+.type-sonderurlaub  { background: #ffedd5; color: #9a3412; border-color: #fdba74; }
+
+/* Legende */
+.type-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    margin-top: 0.75rem;
+    border-top: 1px solid var(--border);
+}
+.type-legend-title {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-right: 0.25rem;
+}

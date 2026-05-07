@@ -203,7 +203,20 @@
                                     <option value="gleitzeit">⏱ Gleitzeit</option>
                                     <option value="homeoffice">🏠 Homeoffice</option>
                                     <option value="krank">🤒 Krank</option>
+                                    <option value="sonderurlaub">🎗 Sonderurlaub</option>
                                 </select>
+                            </div>
+                            <div class="form-group hidden" id="req-reason-group">
+                                <label for="req-reason">Anlass *</label>
+                                <select id="req-reason">
+                                    <option value="">– bitte wählen –</option>
+                                    <option value="hochzeit">💍 Hochzeit</option>
+                                    <option value="geburt">👶 Geburt</option>
+                                    <option value="trauerfall">🕯 Trauerfall</option>
+                                    <option value="umzug">📦 Umzug</option>
+                                    <option value="sonstiges">📝 Sonstiges</option>
+                                </select>
+                                <p class="form-hint">Sonderurlaub wird nicht vom Erholungsurlaub abgezogen.</p>
                             </div>
                             <div class="form-row">
                                 <div class="form-group">
@@ -229,8 +242,9 @@
                             </div>
                             <div id="req-date-hint" class="form-hint hidden"></div>
                             <div class="form-group">
-                                <label for="req-note">Notiz</label>
+                                <label for="req-note" id="req-note-label">Notiz</label>
                                 <input type="text" id="req-note" placeholder="Optional – z.B. Reiseziel, Arzttermin …" maxlength="200">
+                                <p class="form-hint hidden" id="req-note-hint-required">Bei Anlass „Sonstiges" ist eine Begründung erforderlich.</p>
                             </div>
                             <p class="form-hint">Nach dem Absenden wird dein Vorgesetzter automatisch benachrichtigt.</p>
                             <div class="modal-footer">
@@ -398,9 +412,19 @@
                                         <option value="gleitzeit">Gleitzeit</option>
                                         <option value="homeoffice">Homeoffice</option>
                                         <option value="krank">Krank</option>
+                                        <option value="sonderurlaub">Sonderurlaub</option>
                                     </select>
                                 </div>
                                 <button class="btn btn-sm" id="btn-reset-filter">Filter zurücksetzen</button>
+                            </div>
+                            <!-- Farb-Legende für Antragstypen -->
+                            <div class="type-legend" aria-label="Legende Antragstypen">
+                                <span class="type-legend-title">Legende:</span>
+                                <span class="badge badge-type type-urlaub">Urlaub</span>
+                                <span class="badge badge-type type-gleitzeit">Gleitzeit</span>
+                                <span class="badge badge-type type-homeoffice">Homeoffice</span>
+                                <span class="badge badge-type type-krank">Krank</span>
+                                <span class="badge badge-type type-sonderurlaub">Sonderurlaub</span>
                             </div>
                         </div>
                         <div class="card">

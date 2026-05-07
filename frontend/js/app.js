@@ -1126,6 +1126,15 @@ const typeLabels = {
     gleitzeit: 'Gleitzeit',
     homeoffice: 'Homeoffice',
     krank: 'Krank',
+    sonderurlaub: 'Sonderurlaub',
+};
+
+const reasonLabels = {
+    hochzeit: 'Hochzeit',
+    geburt: 'Geburt',
+    trauerfall: 'Trauerfall',
+    umzug: 'Umzug',
+    sonstiges: 'Sonstiges',
 };
 
 const statusLabels = {
@@ -1144,12 +1153,45 @@ function openRequestModal() {
     reqFrom.value = '';
     reqTo.value   = '';
     document.getElementById('req-note').value = '';
+    // Sonderurlaub-Felder zurücksetzen
+    document.getElementById('req-reason').value = '';
+    updateReasonVisibility();
     openModalA11y(requestModal);
 }
 
 function closeRequestModal() {
     closeModalA11y(requestModal);
 }
+
+// Anlass-Feld nur bei Sonderurlaub einblenden, Notiz-Pflicht bei "Sonstiges"
+function updateReasonVisibility() {
+    const type = document.getElementById('req-type').value;
+    const reasonGroup = document.getElementById('req-reason-group');
+    const reason = document.getElementById('req-reason').value;
+    const noteLabel = document.getElementById('req-note-label');
+    const noteInput = document.getElementById('req-note');
+    const noteHint  = document.getElementById('req-note-hint-required');
+
+    if (type === 'sonderurlaub') {
+        reasonGroup.classList.remove('hidden');
+    } else {
+        reasonGroup.classList.add('hidden');
+    }
+
+    // Notiz wird zur Pflicht, wenn Sonderurlaub + Anlass = sonstiges
+    if (type === 'sonderurlaub' && reason === 'sonstiges') {
+        noteLabel.textContent = 'Begründung *';
+        noteInput.placeholder = 'Bitte Anlass kurz erläutern…';
+        noteHint.classList.remove('hidden');
+    } else {
+        noteLabel.textContent = 'Notiz';
+        noteInput.placeholder = 'Optional – z.B. Reiseziel, Arzttermin …';
+        noteHint.classList.add('hidden');
+    }
+}
+
+document.getElementById('req-type').addEventListener('change', updateReasonVisibility);
+document.getElementById('req-reason').addEventListener('change', updateReasonVisibility);
 
 btnNewRequest.addEventListener('click', openRequestModal);
 btnCloseRequestModal.addEventListener('click', closeRequestModal);
@@ -1180,6 +1222,7 @@ btnSubmitRequest.addEventListener('click', async () => {
     newRequestSuccess.classList.add('hidden');
 
     const type     = document.getElementById('req-type').value;
+    const reason   = document.getElementById('req-reason').value;
     const dateFrom = displayToIso(document.getElementById('req-from').value);
     const dateTo   = displayToIso(document.getElementById('req-to').value);
     const note     = document.getElementById('req-note').value.trim();
@@ -1195,6 +1238,19 @@ btnSubmitRequest.addEventListener('click', async () => {
         newRequestError.classList.remove('hidden');
         return;
     }
+    // Sonderurlaub-Validierung
+    if (type === 'sonderurlaub') {
+        if (!reason) {
+            newRequestError.textContent = 'Bitte einen Anlass für den Sonderurlaub auswählen.';
+            newRequestError.classList.remove('hidden');
+            return;
+        }
+        if (reason === 'sonstiges' && !note) {
+            newRequestError.textContent = 'Bei Anlass „Sonstiges" ist eine Begründung im Notizfeld erforderlich.';
+            newRequestError.classList.remove('hidden');
+            return;
+        }
+    }
 
     btnSubmitRequest.disabled = true;
     btnSubmitRequest.textContent = 'Wird gesendet...';
@@ -1202,7 +1258,13 @@ btnSubmitRequest.addEventListener('click', async () => {
     try {
         await apiFetch('/requests', {
             method: 'POST',
-            body: JSON.stringify({ type, dateFrom, dateTo, note: note || undefined }),
+            body: JSON.stringify({
+                type,
+                dateFrom,
+                dateTo,
+                note: note || undefined,
+                reason: type === 'sonderurlaub' ? reason : undefined,
+            }),
         });
         newRequestSuccess.textContent = 'Antrag erfolgreich eingereicht! Dein Vorgesetzter wurde benachrichtigt.';
         newRequestSuccess.classList.remove('hidden');
@@ -1231,6 +1293,16 @@ async function loadMyRequests() {
     }
 }
 
+// Helfer: Typ-Badge mit Farbe + ggf. Anlass bei Sonderurlaub
+function renderTypeBadge(r) {
+    const label = typeLabels[r.type] || r.type;
+    const cls   = `badge badge-type type-${r.type}`;
+    if (r.type === 'sonderurlaub' && r.reason) {
+        return `<span class="${cls}">${esc(label)} – ${esc(reasonLabels[r.reason] || r.reason)}</span>`;
+    }
+    return `<span class="${cls}">${esc(label)}</span>`;
+}
+
 function renderMyRequests(requests) {
     if (!requests || requests.length === 0) {
         requestsTable.classList.add('hidden');
@@ -1252,7 +1324,7 @@ function renderMyRequests(requests) {
             : '';
         return `
             <tr>
-                <td>${esc(typeLabels[r.type] || r.type)}</td>
+                <td>${renderTypeBadge(r)}</td>
                 <td>${zeitraum}</td>
                 <td><span class="badge ${statusClass}">${statusLabel}</span></td>
                 <td>${bearbeiter}</td>
@@ -1368,7 +1440,7 @@ function renderPendingRequests(requests) {
         return `
             <tr>
                 <td><strong>${esc(r.user_name)}</strong></td>
-                <td>${esc(typeLabels[r.type] || r.type)}</td>
+                <td>${renderTypeBadge(r)}</td>
                 <td>${zeitraum}</td>
                 <td>${r.note ? esc(r.note) : '<span class="text-muted">–</span>'}</td>
                 <td class="actions-cell">
@@ -1415,7 +1487,7 @@ function renderAllRequests(requests) {
         return `
             <tr>
                 <td>${esc(r.user_name)}</td>
-                <td>${esc(typeLabels[r.type] || r.type)}</td>
+                <td>${renderTypeBadge(r)}</td>
                 <td>${zeitraum}</td>
                 <td><span class="badge ${statusClass}">${statusLabel}</span></td>
                 <td>${bearbeiter}</td>

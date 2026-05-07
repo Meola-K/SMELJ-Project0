@@ -506,6 +506,9 @@ router.get('/vacation/balance', auth, async (req, res) => {
         );
         const totalDays = entitlement.length ? entitlement[0].total_days : 30;
 
+        // WICHTIG: Sonderurlaub (z.B. Hochzeit, Geburt, Trauerfall, Umzug) wird NICHT
+        // vom Erholungsurlaubsanspruch abgezogen. Daher filtern wir hier strikt nur
+        // type = 'urlaub' und ignorieren 'sonderurlaub' bewusst.
         const [approved] = await db.query(
             `SELECT date_from, date_to FROM requests
              WHERE user_id = ? AND type = 'urlaub' AND status = 'approved'
