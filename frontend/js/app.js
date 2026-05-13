@@ -2311,6 +2311,179 @@ btnReportExport.addEventListener('click', downloadReportCsv);
 
 registerRoute('reports', { pageId: 'page-reports', onEnter: loadReportsPage });
 
+// ── SCRUM-193/197/199: Zeiten-CSV-Export ─────────────────────
+const exportFrom = document.getElementById('export-from');
+const exportTo = document.getElementById('export-to');
+const exportGroup = document.getElementById('export-group');
+const exportError = document.getElementById('export-error');
+const exportSummary = document.getElementById('export-summary');
+const exportEmpty = document.getElementById('export-empty');
+const exportTbody = document.getElementById('export-tbody');
+const btnExportPreview = document.getElementById('btn-export-preview');
+const btnExportCsv = document.getElementById('btn-export-csv');
+
+setupDateInput(exportFrom);
+setupDateInput(exportTo);
+
+async function loadExportPage() {
+    // Default-Zeitraum: aktueller Monat
+    if (!exportFrom.value || !exportTo.value) {
+        const now = new Date();
+        const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        exportFrom.value = isoToDisplay(firstOfMonth.toISOString().split('T')[0]);
+        exportTo.value = isoToDisplay(now.toISOString().split('T')[0]);
+    }
+
+    // Gruppen ins Dropdown laden
+    try {
+        if (!allGroups.length) await loadGroups();
+    } catch (err) {
+        console.error('Gruppen laden fehlgeschlagen:', err);
+    }
+    const currentVal = exportGroup.value;
+    exportGroup.innerHTML = '<option value="">Alle Gruppen</option>';
+    allGroups.forEach(g => {
+        exportGroup.innerHTML += `<option value="${g.id}">${esc(g.name)}</option>`;
+    });
+    if (currentVal) exportGroup.value = currentVal;
+
+    loadExportPreview();
+}
+
+function showExportError(msg) {
+    exportError.textContent = msg;
+    exportError.classList.remove('hidden');
+}
+function hideExportError() {
+    exportError.classList.add('hidden');
+}
+
+function buildExportParams() {
+    const from = displayToIso(exportFrom.value);
+    const to = displayToIso(exportTo.value);
+    if (!from || !to) {
+        showExportError('Bitte Zeitraum (Von / Bis) eingeben.');
+        return null;
+    }
+    if (new Date(from) > new Date(to)) {
+        showExportError('Startdatum muss vor Enddatum liegen.');
+        return null;
+    }
+    hideExportError();
+    const params = new URLSearchParams();
+    params.set('from', from);
+    params.set('to', to);
+    if (exportGroup.value) params.set('groupId', exportGroup.value);
+    return params;
+}
+
+function renderExportRows(data) {
+    const { count, rows } = data;
+    exportSummary.textContent = `${count} ${count === 1 ? 'Eintrag' : 'Einträge'}`;
+
+    if (!count) {
+        exportEmpty.classList.remove('hidden');
+        exportTbody.innerHTML = '';
+        return;
+    }
+    exportEmpty.classList.add('hidden');
+
+    exportTbody.innerHTML = rows.map(r => {
+        const color = r.overtimeMinutes < 0 ? '#dc2626' : (r.overtimeMinutes > 0 ? '#16a34a' : '');
+        return `
+            <tr>
+                <td>${esc(r.name)}</td>
+                <td>${esc(formatDate(r.date))}</td>
+                <td>${esc(r.workTime)}</td>
+                <td${color ? ` style="color:${color}"` : ''}>${esc(r.overtime)}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function loadExportPreview() {
+    const params = buildExportParams();
+    if (!params) return;
+
+    btnExportPreview.disabled = true;
+    btnExportPreview.textContent = 'Lädt…';
+    exportTbody.innerHTML = '<tr><td colspan="4" class="text-muted">Lädt…</td></tr>';
+    try {
+        const data = await apiFetch(`/admin/export/csv?${params.toString()}&format=json`);
+        renderExportRows(data);
+    } catch (err) {
+        showExportError('Fehler beim Laden: ' + err.message);
+        exportSummary.textContent = '–';
+        exportTbody.innerHTML = '<tr><td colspan="4" class="text-muted">–</td></tr>';
+    } finally {
+        btnExportPreview.disabled = false;
+        btnExportPreview.textContent = 'Vorschau aktualisieren';
+    }
+}
+
+async function downloadExportCsv() {
+    const params = buildExportParams();
+    if (!params) return;
+
+    btnExportCsv.disabled = true;
+    const originalLabel = btnExportCsv.innerHTML;
+    btnExportCsv.textContent = 'Erzeuge CSV…';
+
+    try {
+        // CSV-Download via fetch+Blob, weil JWT im Authorization-Header steckt
+        // (ein direkter <a download>-Link kann keinen Header tragen).
+        const token = getToken();
+        const url = `/api/admin/export/csv?${params.toString()}`;
+        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+
+        if (!res.ok) {
+            let msg = 'Download fehlgeschlagen';
+            try {
+                const body = await res.json();
+                msg = body.error || msg;
+                if (res.status === 401 && token) {
+                    clearToken();
+                    window.dispatchEvent(new CustomEvent('auth:logout', { detail: { reason: 'session_expired' } }));
+                    return;
+                }
+            } catch {}
+            throw new Error(msg);
+        }
+
+        const blob = await res.blob();
+        const cd = res.headers.get('Content-Disposition') || '';
+        const today = new Date().toISOString().split('T')[0];
+        let filename = `export_${today}.csv`;
+        const match = cd.match(/filename="?([^"]+)"?/i);
+        if (match) filename = match[1];
+
+        const objUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(objUrl);
+    } catch (err) {
+        showExportError('CSV-Export fehlgeschlagen: ' + err.message);
+    } finally {
+        btnExportCsv.disabled = false;
+        btnExportCsv.innerHTML = originalLabel;
+    }
+}
+
+btnExportPreview.addEventListener('click', loadExportPreview);
+btnExportCsv.addEventListener('click', downloadExportCsv);
+
+[exportFrom, exportTo].forEach(inp => {
+    inp.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); loadExportPreview(); }
+    });
+});
+
+registerRoute('export', { pageId: 'page-export', onEnter: loadExportPage });
+
 // ── Monatskalender (SCRUM-Monatskalender) ──────────────────
 // Zeigt eine Monatsansicht mit farblich markierten Abwesenheiten
 // des angemeldeten Mitarbeiters. Daten kommen vom existierenden

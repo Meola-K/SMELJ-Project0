@@ -791,6 +791,183 @@ function buildAbsenceCsv(rows) {
     return lines.join('\r\n') + '\r\n';
 }
 
+// ── SCRUM-197: Zeiten-Export als CSV ────────────────────────────────────────
+// GET /api/admin/export/csv?from=YYYY-MM-DD&to=YYYY-MM-DD&groupId=<int>
+//                          &format=csv|json (default: csv)
+// Spalten: Mitarbeiter, Datum, Arbeitszeit (hh:mm), Überstunden (hh:mm)
+
+function minutesToHHMM(min) {
+    if (!Number.isFinite(min)) return '00:00';
+    const sign = min < 0 ? '-' : '';
+    const abs = Math.abs(Math.round(min));
+    const h = Math.floor(abs / 60);
+    const m = abs % 60;
+    return `${sign}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function buildTimesCsv(rows) {
+    const headers = ['Mitarbeiter', 'Datum', 'Arbeitszeit', 'Überstunden'];
+    const SEP = ';';
+    const lines = [headers.map(csvEscape).join(SEP)];
+    for (const r of rows) {
+        lines.push([
+            r.name,
+            formatDateDe(r.date),
+            r.workTime,
+            r.overtime
+        ].map(csvEscape).join(SEP));
+    }
+    return lines.join('\r\n') + '\r\n';
+}
+
+router.get('/export/csv', auth, role('admin'), async (req, res) => {
+    try {
+        const { from, to, groupId, format } = req.query;
+
+        if (!from || !to) {
+            return res.status(400).json({ error: 'Zeitraum (from, to) erforderlich' });
+        }
+        const isoRe = /^\d{4}-\d{2}-\d{2}$/;
+        if (!isoRe.test(from) || !isoRe.test(to)) {
+            return res.status(400).json({ error: 'Datum muss im Format YYYY-MM-DD sein' });
+        }
+        if (new Date(from) > new Date(to)) {
+            return res.status(400).json({ error: 'Startdatum muss vor Enddatum liegen' });
+        }
+
+        let groupIdNum = null;
+        if (groupId !== undefined && groupId !== '' && groupId !== 'null') {
+            const n = Number(groupId);
+            if (!Number.isInteger(n) || n <= 0) {
+                return res.status(400).json({ error: 'Ungültige Gruppen-ID' });
+            }
+            groupIdNum = n;
+        }
+
+        // Nutzer laden (optional nach Gruppe gefiltert)
+        const userParams = [];
+        let userWhere = 'u.active = 1';
+        if (groupIdNum !== null) {
+            userWhere += ' AND u.group_id = ?';
+            userParams.push(groupIdNum);
+        }
+        const [users] = await db.query(
+            `SELECT u.id, u.first_name, u.last_name
+             FROM users u
+             WHERE ${userWhere}
+             ORDER BY u.last_name, u.first_name`,
+            userParams
+        );
+        const userIds = users.map(u => u.id);
+
+        // Stempel im Zeitraum laden (nur für gefilterte Nutzer)
+        let stamps = [];
+        let rules = [];
+        if (userIds.length) {
+            const placeholders = userIds.map(() => '?').join(',');
+            const [s] = await db.query(
+                `SELECT user_id, type, stamp_time FROM timestamps_log
+                 WHERE user_id IN (${placeholders})
+                 AND DATE(stamp_time) BETWEEN ? AND ?
+                 ORDER BY user_id, stamp_time ASC`,
+                [...userIds, from, to]
+            );
+            stamps = s;
+
+            const [r] = await db.query(
+                `SELECT user_id, weekday, max_daily_minutes, work_allowed FROM work_rules
+                 WHERE user_id IN (${placeholders})`,
+                userIds
+            );
+            rules = r;
+        }
+
+        // Stempel pro Nutzer und Tag gruppieren
+        const stampsByUserDay = {};
+        for (const s of stamps) {
+            const day = s.stamp_time.toISOString().split('T')[0];
+            const key = `${s.user_id}|${day}`;
+            if (!stampsByUserDay[key]) stampsByUserDay[key] = [];
+            stampsByUserDay[key].push(s);
+        }
+
+        // Regeln pro Nutzer/Wochentag
+        const rulesByUser = {};
+        for (const r of rules) {
+            if (!rulesByUser[r.user_id]) rulesByUser[r.user_id] = {};
+            rulesByUser[r.user_id][r.weekday] = r;
+        }
+
+        // Pro Nutzer alle Tage im Zeitraum durchgehen
+        const result = [];
+        for (const u of users) {
+            const name = `${u.first_name || ''} ${u.last_name || ''}`.trim();
+            const current = new Date(from);
+            const endDate = new Date(to);
+            current.setHours(12, 0, 0, 0);
+            endDate.setHours(12, 0, 0, 0);
+
+            while (current <= endDate) {
+                const iso = current.toISOString().split('T')[0];
+                const entries = stampsByUserDay[`${u.id}|${iso}`] || [];
+
+                let dayMin = 0;
+                for (let i = 0; i < entries.length - 1; i += 2) {
+                    if (entries[i].type === 'in' && entries[i + 1]?.type === 'out') {
+                        dayMin += (new Date(entries[i + 1].stamp_time) - new Date(entries[i].stamp_time)) / 60000;
+                    }
+                }
+
+                // Soll-Arbeitszeit aus work_rules: Montag=0 ... Sonntag=6
+                const weekday = (current.getDay() + 6) % 7;
+                const rule = rulesByUser[u.id]?.[weekday];
+                const expectedMin = (rule && rule.work_allowed) ? (rule.max_daily_minutes || 0) : 0;
+
+                // Tage ohne Stempel UND ohne Soll überspringen (sonst riesige CSV mit 0:00-Zeilen)
+                if (dayMin > 0 || expectedMin > 0) {
+                    result.push({
+                        userId: u.id,
+                        name,
+                        date: iso,
+                        workMinutes: Math.round(dayMin),
+                        overtimeMinutes: Math.round(dayMin - expectedMin),
+                        workTime: minutesToHHMM(dayMin),
+                        overtime: minutesToHHMM(dayMin - expectedMin)
+                    });
+                }
+
+                current.setDate(current.getDate() + 1);
+            }
+        }
+
+        // Sortierung: Name, dann Datum
+        result.sort((a, b) => a.name.localeCompare(b.name) || a.date.localeCompare(b.date));
+
+        // Default ist CSV; JSON nur, wenn explizit angefordert (für Vorschau im Frontend).
+        const wantsJson = (format || '').toLowerCase() === 'json';
+        if (wantsJson) {
+            return res.json({
+                count: result.length,
+                rows: result,
+                filter: { from, to, groupId: groupIdNum }
+            });
+        }
+
+        const csv = buildTimesCsv(result);
+        const safeFrom = from.replace(/[^0-9-]/g, '');
+        const safeTo = to.replace(/[^0-9-]/g, '');
+        const filename = `export_${safeFrom}_${safeTo}.csv`;
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Cache-Control', 'no-store');
+        // UTF-8 BOM, damit Excel-DE Umlaute (Überstunden) korrekt erkennt
+        return res.send('﻿' + csv);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
 router.get('/export/absences', auth, role('admin'), async (req, res) => {
     try {
         const { from, to, type, groupId, status, format } = req.query;

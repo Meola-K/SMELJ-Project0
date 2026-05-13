@@ -77,6 +77,10 @@
                     <span>Anträge</span>
                     <span class="sidebar-badge hidden" id="sidebar-pending-badge" aria-label="Ausstehende Anträge">0</span>
                 </a>
+                <a href="#export" class="sidebar-link" data-route="export" data-roles="admin">
+                    <svg class="sidebar-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <span>Export</span>
+                </a>
                 <a href="#reports" class="sidebar-link" data-route="reports" data-roles="admin">
                     <svg class="sidebar-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     <span>Berichte</span>
@@ -692,6 +696,78 @@
                                 </thead>
                                 <tbody id="report-tbody">
                                     <tr><td colspan="9" class="text-muted">Filter wählen und „Vorschau aktualisieren" klicken.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Export Page (SCRUM-193: Zeiten-CSV-Export) -->
+            <div id="page-export" class="page hidden">
+                <div class="container">
+                    <div class="page-header">
+                        <h1>Zeiten-Export</h1>
+                    </div>
+
+                    <div class="card">
+                        <h3 class="report-filter-title">Filter</h3>
+                        <div id="export-error" class="alert alert-error hidden" role="alert"></div>
+                        <div class="report-filter-grid">
+                            <div class="form-group">
+                                <label for="export-from">Von *</label>
+                                <div class="date-input-wrap">
+                                    <input type="text" id="export-from" placeholder="dd.mm.yy" maxlength="8" inputmode="numeric" pattern="\d{2}\.\d{2}\.\d{2}">
+                                    <input type="date" class="date-picker-hidden" tabindex="-1" aria-hidden="true">
+                                    <button type="button" class="btn-date-picker" aria-label="Kalender öffnen">
+                                        <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="export-to">Bis *</label>
+                                <div class="date-input-wrap">
+                                    <input type="text" id="export-to" placeholder="dd.mm.yy" maxlength="8" inputmode="numeric" pattern="\d{2}\.\d{2}\.\d{2}">
+                                    <input type="date" class="date-picker-hidden" tabindex="-1" aria-hidden="true">
+                                    <button type="button" class="btn-date-picker" aria-label="Kalender öffnen">
+                                        <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="export-group">Gruppe</label>
+                                <select id="export-group">
+                                    <option value="">Alle Gruppen</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="report-actions">
+                            <button class="btn btn-primary" id="btn-export-preview" type="button">Vorschau aktualisieren</button>
+                            <button class="btn btn-success" id="btn-export-csv" type="button">
+                                <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:.4em"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                CSV exportieren
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="report-summary-row">
+                            <h3>Vorschau</h3>
+                            <span class="text-muted" id="export-summary">–</span>
+                        </div>
+                        <div id="export-empty" class="text-muted hidden">Keine Datensätze für die gewählten Filter.</div>
+                        <div class="report-table-wrap">
+                            <table class="table" id="export-table">
+                                <thead>
+                                    <tr>
+                                        <th>Mitarbeiter</th>
+                                        <th>Datum</th>
+                                        <th>Arbeitszeit</th>
+                                        <th>Überstunden</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="export-tbody">
+                                    <tr><td colspan="4" class="text-muted">Filter wählen und „Vorschau aktualisieren" klicken.</td></tr>
                                 </tbody>
                             </table>
                         </div>
