@@ -1,5 +1,6 @@
 import { apiFetch, setToken, clearToken, getToken } from './api.js';
 import { registerRoute, onNavigate, navigateTo, startRouter } from './router.js';
+import { showToast, toast, openModal, closeModal as utilsCloseModal, initModal, initModalSystem, confirmModal } from './utils.js';
 
 // ── DOM References ──────────────────────────────────────────
 const pageLogin = document.getElementById('page-login');
@@ -247,20 +248,7 @@ async function updateSidebarPendingBadge() {
     } catch {}
 }
 
-function showToast(title, body, type = 'info') {
-    const container = document.getElementById('toast-container');
-    if (!container) return;
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
-    toast.innerHTML = `<div class="toast-title">${esc(title)}</div>${body ? `<div class="toast-body">${esc(body)}</div>` : ''}`;
-    container.appendChild(toast);
-    setTimeout(() => {
-        toast.style.transition = 'opacity 0.3s';
-        toast.style.opacity = '0';
-        setTimeout(() => toast.remove(), 300);
-    }, 5000);
-}
+// showToast, toast, openModal, closeModal, confirmModal → importiert aus ./utils.js
 
 let socket = null;
 function setupSocket() {
@@ -402,65 +390,23 @@ document.querySelectorAll('.date-input-wrap').forEach(wrap => {
     });
 });
 
-// ── Barrierefreiheit: Modal Focus-Trap & ESC ──────────────────
-let lastFocusedElement = null;
+// ── Barrierefreiheit: Modal-System aus utils.js ───────────────
+// openModal, closeModal (mit Focus-Trap & ESC) → importiert aus ./utils.js
+// initModalSystem() registriert den globalen ESC-Handler
+initModalSystem();
 
-function trapFocus(modalEl) {
-    const focusable = modalEl.querySelectorAll(
-        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), a[href]'
-    );
-    if (!focusable.length) return;
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    first.focus();
-
-    modalEl._trapHandler = (e) => {
-        if (e.key !== 'Tab') return;
-        if (e.shiftKey) {
-            if (document.activeElement === first) { e.preventDefault(); last.focus(); }
-        } else {
-            if (document.activeElement === last) { e.preventDefault(); first.focus(); }
-        }
-    };
-    modalEl.addEventListener('keydown', modalEl._trapHandler);
-}
-
-function releaseFocus(modalEl) {
-    if (modalEl._trapHandler) {
-        modalEl.removeEventListener('keydown', modalEl._trapHandler);
-        delete modalEl._trapHandler;
-    }
-    if (lastFocusedElement) {
-        lastFocusedElement.focus();
-        lastFocusedElement = null;
-    }
-}
-
-function openModalA11y(modalEl) {
-    lastFocusedElement = document.activeElement;
-    modalEl.classList.remove('hidden');
-    trapFocus(modalEl);
-}
-
-function closeModalA11y(modalEl) {
-    modalEl.classList.add('hidden');
-    releaseFocus(modalEl);
-}
-
-// Globaler ESC-Handler für alle Modals
+// Sidebar bei ESC schließen (zusätzlich zum Modal-ESC in utils.js)
 document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape') return;
-    const openModals = document.querySelectorAll('.modal:not(.hidden)');
-    if (openModals.length) {
-        const topModal = openModals[openModals.length - 1];
-        closeModalA11y(topModal);
-    }
-    // Sidebar schließen bei ESC
-    if (sidebar.classList.contains('is-open')) {
+    if (e.key === 'Escape' && sidebar.classList.contains('is-open')) {
         closeSidebar();
         btnHamburger.focus();
     }
 });
+
+// Alias für Abwärtskompatibilität innerhalb dieser Datei
+const openModalA11y  = openModal;
+const closeModalA11y = utilsCloseModal;
+
 
 // ── Dashboard ───────────────────────────────────────────────
 function startTodayTicker() {
@@ -811,6 +757,7 @@ formCreateUser.addEventListener('submit', async (e) => {
 
         createSuccess.textContent = 'Benutzer erfolgreich erstellt!';
         createSuccess.classList.remove('hidden');
+        showToast('Benutzer erstellt', 'Der neue Benutzer wurde erfolgreich angelegt.', 'success');
         formCreateUser.reset();
         cuEmailHint.textContent = '';
 
@@ -826,6 +773,7 @@ formCreateUser.addEventListener('submit', async (e) => {
     } catch (err) {
         createError.textContent = err.message;
         createError.classList.remove('hidden');
+        showToast('Fehler', err.message, 'error');
         const btn = document.getElementById('btn-submit-user');
         btn.disabled = false;
         btn.textContent = 'Benutzer erstellen';
@@ -953,6 +901,7 @@ formEditUser.addEventListener('submit', async (e) => {
 
         editSuccess.textContent = 'Benutzer erfolgreich aktualisiert!';
         editSuccess.classList.remove('hidden');
+        showToast('Gespeichert', 'Benutzerdaten wurden aktualisiert.', 'success');
 
         await loadUsers();
 
@@ -966,6 +915,7 @@ formEditUser.addEventListener('submit', async (e) => {
     } catch (err) {
         editError.textContent = err.message;
         editError.classList.remove('hidden');
+        showToast('Fehler', err.message, 'error');
         const btn = document.getElementById('btn-submit-edit');
         btn.disabled = false;
         btn.textContent = 'Speichern';
@@ -1307,6 +1257,7 @@ btnSubmitRequest.addEventListener('click', async () => {
         });
         newRequestSuccess.textContent = 'Antrag erfolgreich eingereicht! Dein Vorgesetzter wurde benachrichtigt.';
         newRequestSuccess.classList.remove('hidden');
+        showToast('Antrag gestellt', 'Dein Vorgesetzter wurde benachrichtigt.', 'success');
         await loadMyRequests();
         await loadVacation();
         setTimeout(() => {
@@ -1317,6 +1268,7 @@ btnSubmitRequest.addEventListener('click', async () => {
         // Überlappungsfehler vom Backend klar anzeigen
         newRequestError.textContent = err.message;
         newRequestError.classList.remove('hidden');
+        showToast('Fehler', err.message, 'error');
     } finally {
         btnSubmitRequest.disabled = false;
         btnSubmitRequest.textContent = 'Antrag stellen';

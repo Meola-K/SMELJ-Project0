@@ -216,19 +216,35 @@ body {
     background: white;
     border-left: 4px solid #2563eb;
     border-radius: 6px;
-    padding: 0.85rem 1rem;
+    padding: 0.75rem 1rem;
     box-shadow: 0 8px 24px rgba(0,0,0,0.12);
     font-size: 0.875rem;
     pointer-events: auto;
     animation: toast-in 0.25s ease-out;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
 }
 
 .toast.toast-success { border-left-color: #16a34a; }
-.toast.toast-error { border-left-color: #dc2626; }
+.toast.toast-error   { border-left-color: #dc2626; }
+.toast.toast-info    { border-left-color: #2563eb; }
+
+.toast-icon {
+    font-size: 1rem;
+    line-height: 1.4;
+    flex-shrink: 0;
+}
+.toast.toast-success .toast-icon { color: #16a34a; }
+.toast.toast-error   .toast-icon { color: #dc2626; }
+.toast.toast-info    .toast-icon { color: #2563eb; }
+
+.toast-text { flex: 1; min-width: 0; }
 
 .toast-title {
     font-weight: 600;
     margin-bottom: 0.2rem;
+    color: #1e293b;
 }
 
 .toast-body {
@@ -236,10 +252,26 @@ body {
     font-size: 0.8rem;
 }
 
+.toast-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #94a3b8;
+    font-size: 1.1rem;
+    line-height: 1;
+    padding: 0;
+    flex-shrink: 0;
+    transition: color 0.15s;
+}
+.toast-close:hover { color: #475569; }
+
 @keyframes toast-in {
     from { opacity: 0; transform: translateX(20px); }
-    to { opacity: 1; transform: translateX(0); }
+    to   { opacity: 1; transform: translateX(0); }
 }
+
+/* Scroll-Lock wenn Modal offen */
+body.modal-open { overflow: hidden; }
 
 /* ── Sidebar Footer (User-Info + Logout) ────────────── */
 
@@ -981,6 +1013,7 @@ body {
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,0.4);
+    z-index: 0;
 }
 
 .modal-content {
@@ -1200,21 +1233,7 @@ body {
 .btn-deny    { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
 .btn-deny:hover    { background: #fecaca; }
 
-/* ── Toast-Benachrichtigungen (WebSocket) ────────────────── */
-.toast-container {
-    position: fixed;
-    bottom: 1.5rem;
-    right: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-    z-index: 9999;
-    pointer-events: none;
-}
 
-.stamps-table td {
-    vertical-align: middle;
-}
 
 .stamp-time-cell {
     font-weight: 600;
