@@ -1022,6 +1022,23 @@ body {
     border-top: 1px solid var(--border);
 }
 
+.modal-message {
+    margin-bottom: 1rem;
+    line-height: 1.5;
+}
+
+.radio-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    cursor: pointer;
+}
+
+.radio-option input[type="radio"] {
+    margin: 0;
+}
+
 /* ── Team Stats ─────────────────────────────────────── */
 
 .team-stats {

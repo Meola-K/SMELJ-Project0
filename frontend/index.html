@@ -706,6 +706,38 @@
         </div>
     </div>
 
+    <div id="modal-delete-group" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-delete-group-title">
+        <div class="modal-backdrop modal-backdrop-delete-group"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-delete-group-title">Gruppe löschen</h2>
+                <button class="modal-close" id="btn-close-delete-group-modal" aria-label="Dialog schließen">&times;</button>
+            </div>
+            <div id="delete-group-error" class="alert alert-error hidden" role="alert"></div>
+            <p id="delete-group-message" class="modal-message"></p>
+            <div id="delete-group-options" class="form-group hidden">
+                <label class="radio-option">
+                    <input type="radio" name="delete-group-action" value="move">
+                    <span>Mitarbeiter in andere Gruppe verschieben</span>
+                </label>
+                <div id="delete-group-target-wrap" class="form-group hidden" style="margin-left: 1.5rem;">
+                    <label for="delete-group-target">Zielgruppe</label>
+                    <select id="delete-group-target">
+                        <option value="">-- Bitte wählen --</option>
+                    </select>
+                </div>
+                <label class="radio-option">
+                    <input type="radio" name="delete-group-action" value="unassign">
+                    <span>Mitarbeiter ohne Gruppe behalten</span>
+                </label>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn" id="btn-cancel-delete-group">Abbrechen</button>
+                <button type="button" class="btn btn-danger" id="btn-confirm-delete-group" disabled>Löschen</button>
+            </div>
+        </div>
+    </div>
+
     <div id="toast-container" class="toast-container" aria-live="polite" role="status"></div>
 
     <script src="/socket.io/socket.io.js"></script>

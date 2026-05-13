@@ -1053,15 +1053,116 @@ document.getElementById('btn-create-group').addEventListener('click', async () =
     } catch (err) { alert('Fehler: ' + err.message); }
 });
 
-window._deleteGroup = async function (id, name, memberCount) {
-    let msg = `Gruppe "${name}" wirklich löschen?`;
-    if (memberCount > 0) msg += `\n\n${memberCount} Mitglieder werden keiner Gruppe mehr zugeordnet.`;
-    if (!confirm(msg)) return;
-    try {
-        await apiFetch(`/admin/groups/${id}`, { method: 'DELETE' });
-        loadGroupsPage();
-    } catch (err) { alert('Fehler: ' + err.message); }
+const deleteGroupModal      = document.getElementById('modal-delete-group');
+const deleteGroupMessage    = document.getElementById('delete-group-message');
+const deleteGroupOptions    = document.getElementById('delete-group-options');
+const deleteGroupTargetWrap = document.getElementById('delete-group-target-wrap');
+const deleteGroupTarget     = document.getElementById('delete-group-target');
+const deleteGroupError      = document.getElementById('delete-group-error');
+const btnConfirmDeleteGroup = document.getElementById('btn-confirm-delete-group');
+const btnCancelDeleteGroup  = document.getElementById('btn-cancel-delete-group');
+const btnCloseDeleteGroup   = document.getElementById('btn-close-delete-group-modal');
+
+let deleteGroupCtx = null; // { id, memberCount }
+
+function closeDeleteGroupModal() {
+    closeModalA11y(deleteGroupModal);
+    deleteGroupCtx = null;
+}
+
+function updateDeleteGroupConfirmState() {
+    if (!deleteGroupCtx) return;
+    if (deleteGroupCtx.memberCount === 0) {
+        btnConfirmDeleteGroup.disabled = false;
+        return;
+    }
+    const choice = document.querySelector('input[name="delete-group-action"]:checked');
+    if (!choice) {
+        btnConfirmDeleteGroup.disabled = true;
+        return;
+    }
+    if (choice.value === 'move') {
+        btnConfirmDeleteGroup.disabled = !deleteGroupTarget.value;
+    } else {
+        btnConfirmDeleteGroup.disabled = false;
+    }
+}
+
+window._deleteGroup = function (id, name, memberCount) {
+    deleteGroupCtx = { id, memberCount };
+    deleteGroupError.classList.add('hidden');
+    deleteGroupError.textContent = '';
+    btnConfirmDeleteGroup.disabled = true;
+
+    // Radios zurücksetzen
+    document.querySelectorAll('input[name="delete-group-action"]').forEach(r => { r.checked = false; });
+    deleteGroupTargetWrap.classList.add('hidden');
+    deleteGroupTarget.value = '';
+
+    if (memberCount === 0) {
+        // SCRUM-324: leere Gruppen direkt löschbar
+        deleteGroupMessage.textContent = `Gruppe "${name}" löschen? Keine Mitarbeiter sind zugeordnet.`;
+        deleteGroupOptions.classList.add('hidden');
+        btnConfirmDeleteGroup.disabled = false;
+    } else {
+        deleteGroupMessage.textContent = `Gruppe "${name}" löschen? ${memberCount} Mitarbeiter ${memberCount === 1 ? 'ist' : 'sind'} zugeordnet.`;
+        deleteGroupOptions.classList.remove('hidden');
+
+        // Dropdown füllen mit verfügbaren Gruppen (außer der zu löschenden)
+        const others = allGroups.filter(g => g.id !== id);
+        deleteGroupTarget.innerHTML = '<option value="">-- Bitte wählen --</option>' +
+            others.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('');
+    }
+
+    openModalA11y(deleteGroupModal);
 };
+
+document.querySelectorAll('input[name="delete-group-action"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+        if (radio.value === 'move' && radio.checked) {
+            deleteGroupTargetWrap.classList.remove('hidden');
+        } else {
+            deleteGroupTargetWrap.classList.add('hidden');
+        }
+        updateDeleteGroupConfirmState();
+    });
+});
+
+deleteGroupTarget.addEventListener('change', updateDeleteGroupConfirmState);
+
+btnCancelDeleteGroup.addEventListener('click', closeDeleteGroupModal);
+btnCloseDeleteGroup.addEventListener('click', closeDeleteGroupModal);
+deleteGroupModal.querySelector('.modal-backdrop').addEventListener('click', closeDeleteGroupModal);
+
+btnConfirmDeleteGroup.addEventListener('click', async () => {
+    if (!deleteGroupCtx) return;
+    const { id, memberCount } = deleteGroupCtx;
+
+    let targetGroupId = null;
+    if (memberCount > 0) {
+        const choice = document.querySelector('input[name="delete-group-action"]:checked');
+        if (!choice) return;
+        if (choice.value === 'move') {
+            const v = deleteGroupTarget.value;
+            if (!v) return;
+            targetGroupId = Number(v);
+        }
+    }
+
+    btnConfirmDeleteGroup.disabled = true;
+    try {
+        await apiFetch(`/admin/groups/${id}`, {
+            method: 'DELETE',
+            body: JSON.stringify({ targetGroupId })
+        });
+        closeDeleteGroupModal();
+        loadGroupsPage();
+    } catch (err) {
+        deleteGroupError.textContent = 'Fehler: ' + err.message;
+        deleteGroupError.classList.remove('hidden');
+        updateDeleteGroupConfirmState();
+    }
+});
 
 // ── Team Page ───────────────────────────────────────────────
 async function loadTeamPage() {

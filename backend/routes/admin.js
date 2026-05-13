@@ -204,8 +204,34 @@ router.post('/groups', auth, role('admin'), async (req, res) => {
 
 router.delete('/groups/:id', auth, role('admin'), async (req, res) => {
     try {
-        await db.query('UPDATE users SET group_id = NULL WHERE group_id = ?', [req.params.id]);
-        await db.query('DELETE FROM groups_table WHERE id = ?', [req.params.id]);
+        const groupId = Number(req.params.id);
+        if (!Number.isInteger(groupId) || groupId <= 0) {
+            return res.status(400).json({ error: 'Ungültige Gruppen-ID' });
+        }
+
+        const rawTarget = req.body ? req.body.targetGroupId : null;
+        let targetGroupId = null;
+        if (rawTarget !== null && rawTarget !== undefined && rawTarget !== '') {
+            const parsed = Number(rawTarget);
+            if (!Number.isInteger(parsed) || parsed <= 0) {
+                return res.status(400).json({ error: 'Ungültige Ziel-Gruppen-ID' });
+            }
+            if (parsed === groupId) {
+                return res.status(400).json({ error: 'Zielgruppe darf nicht die zu löschende Gruppe sein' });
+            }
+            const [target] = await db.query('SELECT id FROM groups_table WHERE id = ?', [parsed]);
+            if (target.length === 0) {
+                return res.status(404).json({ error: 'Zielgruppe nicht gefunden' });
+            }
+            targetGroupId = parsed;
+        }
+
+        if (targetGroupId !== null) {
+            await db.query('UPDATE users SET group_id = ? WHERE group_id = ?', [targetGroupId, groupId]);
+        } else {
+            await db.query('UPDATE users SET group_id = NULL WHERE group_id = ?', [groupId]);
+        }
+        await db.query('DELETE FROM groups_table WHERE id = ?', [groupId]);
         res.json({ message: 'Gruppe gelöscht' });
     } catch (err) {
         console.error(err);
