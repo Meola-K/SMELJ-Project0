@@ -131,6 +131,50 @@ router.delete('/users/:id', auth, role('admin'), async (req, res) => {
     }
 });
 
+// DSGVO Art. 17 – Personenbezogene Daten anonymisieren
+// Arbeitszeitdaten bleiben erhalten (Aufbewahrungspflicht §16 ArbZG: 2 Jahre,
+// lohnrelevante Daten §41 EStG/§257 HGB: 6 Jahre), aber ohne Personenbezug.
+router.delete('/users/:id/gdpr', auth, role('admin'), async (req, res) => {
+    try {
+        const userId = parseInt(req.params.id);
+        if (userId === req.user.id) return res.status(400).json({ error: 'Eigenen Account nicht löschbar' });
+
+        const [user] = await db.query('SELECT active FROM users WHERE id = ?', [userId]);
+        if (!user.length) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+        if (user[0].active) return res.status(400).json({ error: 'Benutzer muss zuerst deaktiviert werden' });
+
+        // Personenbezogene Daten im User anonymisieren
+        await db.query(
+            `UPDATE users SET
+                email = CONCAT('geloescht_', id, '@anonym.local'),
+                password = 'ANONYMIZED',
+                first_name = 'Gelöscht',
+                last_name = CONCAT('Nutzer-', id),
+                nfc_uid = NULL
+            WHERE id = ?`,
+            [userId]
+        );
+
+        // Notizen in Anträgen entfernen (können Gesundheitsdaten enthalten)
+        await db.query('UPDATE requests SET note = NULL WHERE user_id = ?', [userId]);
+
+        // Begründungen in Korrekturen entfernen
+        await db.query(
+            "UPDATE corrections SET reason = 'Anonymisiert (DSGVO)' WHERE user_id = ?",
+            [userId]
+        );
+
+        // Konfiguration löschen (keine Aufbewahrungspflicht)
+        await db.query('DELETE FROM work_rules WHERE user_id = ?', [userId]);
+        await db.query('DELETE FROM time_limits WHERE user_id = ?', [userId]);
+
+        res.json({ message: 'Personenbezogene Daten anonymisiert. Arbeitszeitdaten bleiben aufbewahrungspflichtig erhalten.' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
 // Groups
 router.get('/groups', auth, role('admin'), async (req, res) => {
     try {
@@ -160,8 +204,34 @@ router.post('/groups', auth, role('admin'), async (req, res) => {
 
 router.delete('/groups/:id', auth, role('admin'), async (req, res) => {
     try {
-        await db.query('UPDATE users SET group_id = NULL WHERE group_id = ?', [req.params.id]);
-        await db.query('DELETE FROM groups_table WHERE id = ?', [req.params.id]);
+        const groupId = Number(req.params.id);
+        if (!Number.isInteger(groupId) || groupId <= 0) {
+            return res.status(400).json({ error: 'Ungültige Gruppen-ID' });
+        }
+
+        const rawTarget = req.body ? req.body.targetGroupId : null;
+        let targetGroupId = null;
+        if (rawTarget !== null && rawTarget !== undefined && rawTarget !== '') {
+            const parsed = Number(rawTarget);
+            if (!Number.isInteger(parsed) || parsed <= 0) {
+                return res.status(400).json({ error: 'Ungültige Ziel-Gruppen-ID' });
+            }
+            if (parsed === groupId) {
+                return res.status(400).json({ error: 'Zielgruppe darf nicht die zu löschende Gruppe sein' });
+            }
+            const [target] = await db.query('SELECT id FROM groups_table WHERE id = ?', [parsed]);
+            if (target.length === 0) {
+                return res.status(404).json({ error: 'Zielgruppe nicht gefunden' });
+            }
+            targetGroupId = parsed;
+        }
+
+        if (targetGroupId !== null) {
+            await db.query('UPDATE users SET group_id = ? WHERE group_id = ?', [targetGroupId, groupId]);
+        } else {
+            await db.query('UPDATE users SET group_id = NULL WHERE group_id = ?', [groupId]);
+        }
+        await db.query('DELETE FROM groups_table WHERE id = ?', [groupId]);
         res.json({ message: 'Gruppe gelöscht' });
     } catch (err) {
         console.error(err);
@@ -202,6 +272,44 @@ router.put('/devices/:id/assign', auth, role('admin'), async (req, res) => {
         if (io) io.emit('device:assignMode', { deviceId: req.params.id, userId });
 
         res.json({ message: 'Zuweisungsmodus aktiviert' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+router.delete('/devices/:id', auth, role('admin'), async (req, res) => {
+    try {
+        await db.query('DELETE FROM devices WHERE id = ?', [req.params.id]);
+        res.json({ message: 'Gerät gelöscht' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+router.put('/devices/:id', auth, role('admin'), async (req, res) => {
+    try {
+        const { name, location, active } = req.body;
+        const fields = [];
+        const params = [];
+        if (name !== undefined) { fields.push('name = ?'); params.push(name); }
+        if (location !== undefined) { fields.push('location = ?'); params.push(location); }
+        if (active !== undefined) { fields.push('active = ?'); params.push(active ? 1 : 0); }
+        if (!fields.length) return res.status(400).json({ error: 'Keine Änderungen' });
+        params.push(req.params.id);
+        await db.query(`UPDATE devices SET ${fields.join(', ')} WHERE id = ?`, params);
+        res.json({ message: 'Gerät aktualisiert' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+router.put('/users/:id/nfc', auth, role('admin'), async (req, res) => {
+    try {
+        await db.query('UPDATE users SET nfc_uid = NULL WHERE id = ?', [req.params.id]);
+        res.json({ message: 'NFC-Tag entfernt' });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Serverfehler' });
@@ -424,6 +532,9 @@ router.get('/vacation/balance', auth, async (req, res) => {
         );
         const totalDays = entitlement.length ? entitlement[0].total_days : 30;
 
+        // WICHTIG: Sonderurlaub (z.B. Hochzeit, Geburt, Trauerfall, Umzug) wird NICHT
+        // vom Erholungsurlaubsanspruch abgezogen. Daher filtern wir hier strikt nur
+        // type = 'urlaub' und ignorieren 'sonderurlaub' bewusst.
         const [approved] = await db.query(
             `SELECT date_from, date_to FROM requests
              WHERE user_id = ? AND type = 'urlaub' AND status = 'approved'

@@ -62,6 +62,8 @@ let allUsers = [];
 let allGroups = [];
 let isStampedIn = false;
 let todayTimer = null;
+let liveBaseMinutes = 0;
+let liveBaseTimestamp = 0;
 
 // ── Rollenbasierte Navigation ───────────────────────────────
 const roleLabelsMap = { admin: 'Admin', vorgesetzter: 'Vorgesetzter', arbeiter: 'Mitarbeiter' };
@@ -86,6 +88,7 @@ onNavigate((routeName) => {
     sidebarNav.querySelectorAll('.sidebar-link').forEach(link => {
         link.classList.toggle('active', link.dataset.route === routeName);
     });
+    if (routeName !== 'dashboard') clearInterval(todayTimer);
 });
 
 // ── Mobile Sidebar Toggle ───────────────────────────────────
@@ -93,12 +96,16 @@ function openSidebar() {
     sidebar.classList.add('is-open');
     sidebarOverlay.classList.remove('hidden');
     btnHamburger.classList.add('is-active');
+    btnHamburger.setAttribute('aria-expanded', 'true');
+    btnHamburger.setAttribute('aria-label', 'Menü schließen');
 }
 
 function closeSidebar() {
     sidebar.classList.remove('is-open');
     sidebarOverlay.classList.add('hidden');
     btnHamburger.classList.remove('is-active');
+    btnHamburger.setAttribute('aria-expanded', 'false');
+    btnHamburger.setAttribute('aria-label', 'Menü öffnen');
 }
 
 btnHamburger.addEventListener('click', () => {
@@ -142,7 +149,9 @@ registerRoute('requests-overview', {
 });
 
 // ── Login ───────────────────────────────────────────────────
-btnLogin.addEventListener('click', async () => {
+const formLogin = document.getElementById('form-login');
+formLogin.addEventListener('submit', async (e) => {
+    e.preventDefault();
     loginError.classList.add('hidden');
     try {
         const data = await apiFetch('/auth/login', {
@@ -159,11 +168,8 @@ btnLogin.addEventListener('click', async () => {
     } catch (err) {
         loginError.textContent = err.message;
         loginError.classList.remove('hidden');
+        loginError.focus();
     }
-});
-
-loginPassword.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') btnLogin.click();
 });
 
 // ── Logout ──────────────────────────────────────────────────
@@ -246,6 +252,7 @@ function showToast(title, body, type = 'info') {
     if (!container) return;
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
+    toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
     toast.innerHTML = `<div class="toast-title">${esc(title)}</div>${body ? `<div class="toast-body">${esc(body)}</div>` : ''}`;
     container.appendChild(toast);
     setTimeout(() => {
@@ -286,12 +293,37 @@ function setupSocket() {
             if (typeof loadPendingCorrections === 'function') loadPendingCorrections();
         }
     });
+
+    socket.on('stamp:update', (data) => {
+        if (!currentUser || data.userId === currentUser.id) return;
+        if (currentUser.role !== 'admin' && currentUser.role !== 'vorgesetzter') return;
+        const fullName = `${data.user?.firstName ?? ''} ${data.user?.lastName ?? ''}`.trim() || 'Mitarbeiter';
+        const action = data.type === 'in' ? 'eingestempelt' : 'ausgestempelt';
+        showToast('Stempel-Update', `${fullName} hat sich ${action}`, 'info');
+    });
+
+    socket.on('nfc:assigned', async () => {
+        showToast('NFC zugewiesen', 'Tag wurde erfolgreich zugewiesen', 'success');
+        try {
+            allUsers = await apiFetch('/admin/users');
+            populateDeviceDropdowns();
+            renderNfcTable();
+            await loadDevices();
+            const statusEl = document.getElementById('assign-status');
+            if (statusEl) {
+                statusEl.className = 'alert alert-success';
+                statusEl.textContent = 'NFC-Tag erfolgreich zugewiesen!';
+                statusEl.classList.remove('hidden');
+            }
+        } catch {}
+    });
 }
 
 // ── Helpers ─────────────────────────────────────────────────
-function formatMinutes(mins) {
-    const sign = mins < 0 ? '-' : '';
-    const abs = Math.abs(Math.floor(mins));
+function formatMinutes(mins, withSign = false) {
+    const intMins = Math.floor(mins);
+    const sign = intMins < 0 ? '-' : (withSign ? '+' : '');
+    const abs = Math.abs(intMins);
     const h = Math.floor(abs / 60);
     const m = abs % 60;
     return `${sign}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
@@ -304,7 +336,8 @@ function formatTime(dateStr) {
 
 function formatDate(dateStr) {
     const d = new Date(dateStr);
-    return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+    const yy = String(d.getFullYear()).slice(-2);
+    return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${yy}`;
 }
 
 function esc(str) {
@@ -314,7 +347,135 @@ function esc(str) {
     return div.innerHTML;
 }
 
+// ── Datums-Konvertierung dd.mm.yy <-> ISO ─────────────────────
+function isoToDisplay(isoStr) {
+    // "2026-04-16" -> "16.04.26"
+    if (!isoStr) return '';
+    const [y, m, d] = isoStr.split('-');
+    return `${d}.${m}.${y.slice(-2)}`;
+}
+
+function displayToIso(displayStr) {
+    // "16.04.26" -> "2026-04-16"
+    if (!displayStr) return '';
+    const parts = displayStr.split('.');
+    if (parts.length !== 3) return '';
+    const [d, m, yy] = parts;
+    const fullYear = parseInt(yy) < 70 ? `20${yy}` : `19${yy}`;
+    return `${fullYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+}
+
+// Auto-Punkt-Einfügung bei Datumseingabe
+function setupDateInput(inputEl) {
+    inputEl.addEventListener('input', () => {
+        let v = inputEl.value.replace(/[^\d.]/g, '');
+        // Auto-Punkt nach dd und mm
+        if (v.length === 2 && !v.includes('.')) v += '.';
+        else if (v.length === 5 && v.indexOf('.') === 2 && v.lastIndexOf('.') === 2) v += '.';
+        if (v.length > 8) v = v.slice(0, 8);
+        inputEl.value = v;
+    });
+}
+
+// Alle Datums-Inputs initialisieren
+document.querySelectorAll('input[pattern="\\d{2}\\.\\d{2}\\.\\d{2}"]').forEach(setupDateInput);
+
+// Kalender-Buttons mit Text-Inputs verbinden
+document.querySelectorAll('.date-input-wrap').forEach(wrap => {
+    const textInput = wrap.querySelector('input[type="text"]');
+    const datePicker = wrap.querySelector('.date-picker-hidden');
+    const btn = wrap.querySelector('.btn-date-picker');
+    if (!textInput || !datePicker || !btn) return;
+
+    btn.addEventListener('click', () => {
+        // Aktuellen Wert ins Date-Input übernehmen
+        const iso = displayToIso(textInput.value);
+        if (iso) datePicker.value = iso;
+        datePicker.showPicker();
+    });
+
+    datePicker.addEventListener('change', () => {
+        if (datePicker.value) {
+            textInput.value = isoToDisplay(datePicker.value);
+            textInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    });
+});
+
+// ── Barrierefreiheit: Modal Focus-Trap & ESC ──────────────────
+let lastFocusedElement = null;
+
+function trapFocus(modalEl) {
+    const focusable = modalEl.querySelectorAll(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), a[href]'
+    );
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    first.focus();
+
+    modalEl._trapHandler = (e) => {
+        if (e.key !== 'Tab') return;
+        if (e.shiftKey) {
+            if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+        } else {
+            if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+    };
+    modalEl.addEventListener('keydown', modalEl._trapHandler);
+}
+
+function releaseFocus(modalEl) {
+    if (modalEl._trapHandler) {
+        modalEl.removeEventListener('keydown', modalEl._trapHandler);
+        delete modalEl._trapHandler;
+    }
+    if (lastFocusedElement) {
+        lastFocusedElement.focus();
+        lastFocusedElement = null;
+    }
+}
+
+function openModalA11y(modalEl) {
+    lastFocusedElement = document.activeElement;
+    modalEl.classList.remove('hidden');
+    trapFocus(modalEl);
+}
+
+function closeModalA11y(modalEl) {
+    modalEl.classList.add('hidden');
+    releaseFocus(modalEl);
+}
+
+// Globaler ESC-Handler für alle Modals
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const openModals = document.querySelectorAll('.modal:not(.hidden)');
+    if (openModals.length) {
+        const topModal = openModals[openModals.length - 1];
+        closeModalA11y(topModal);
+    }
+    // Sidebar schließen bei ESC
+    if (sidebar.classList.contains('is-open')) {
+        closeSidebar();
+        btnHamburger.focus();
+    }
+});
+
 // ── Dashboard ───────────────────────────────────────────────
+function startTodayTicker() {
+    clearInterval(todayTimer);
+    todayTimer = setInterval(() => {
+        const live = liveBaseMinutes + (Date.now() - liveBaseTimestamp) / 60000;
+        todayMinutesEl.textContent = formatMinutes(live);
+    }, 1000);
+}
+
+function stopTodayTicker() {
+    clearInterval(todayTimer);
+    todayTimer = null;
+}
+
 async function loadDashboard() {
     try {
         const data = await apiFetch('/stamp/today');
@@ -325,22 +486,14 @@ async function loadDashboard() {
 
         const now = new Date();
         const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        historyFrom.value = firstOfMonth.toISOString().split('T')[0];
-        historyTo.value = now.toISOString().split('T')[0];
+        historyFrom.value = isoToDisplay(firstOfMonth.toISOString().split('T')[0]);
+        historyTo.value = isoToDisplay(now.toISOString().split('T')[0]);
         loadHistory();
         loadVacation();
         loadMyRequests();
 
-        clearInterval(todayTimer);
-        if (isStampedIn) {
-            todayTimer = setInterval(async () => {
-                try {
-                    const fresh = await apiFetch('/stamp/today');
-                    const freshLast = fresh.stamps && fresh.stamps.length ? fresh.stamps[fresh.stamps.length - 1] : null;
-                    updateStampUI(fresh.todayMinutes, fresh.balance, freshLast);
-                } catch {}
-            }, 30000);
-        }
+        if (isStampedIn) startTodayTicker();
+        else stopTodayTicker();
     } catch (err) {
         console.error(err);
     }
@@ -353,8 +506,10 @@ function updateStampUI(todayMins, balance, lastStamp) {
     btnStampText.textContent = isStampedIn ? 'Ausstempeln' : 'Einstempeln';
     btnStamp.className = `btn btn-stamp ${isStampedIn ? 'stamp-out' : 'stamp-in'}`;
     todayMinutesEl.textContent = formatMinutes(todayMins);
-    monthBalanceEl.textContent = formatMinutes(balance);
+    monthBalanceEl.textContent = formatMinutes(balance, true);
     monthBalanceEl.className = `stamp-info-value ${balance >= 0 ? 'positive' : 'negative'}`;
+    liveBaseMinutes = todayMins;
+    liveBaseTimestamp = Date.now();
 
     if (lastStamp) {
         const time = formatTime(lastStamp.stamp_time);
@@ -442,16 +597,8 @@ btnStamp.addEventListener('click', async () => {
         updateStampUI(fresh.todayMinutes, fresh.balance, freshLast);
         renderTodayStamps(fresh.stamps);
 
-        clearInterval(todayTimer);
-        if (isStampedIn) {
-            todayTimer = setInterval(async () => {
-                try {
-                    const f = await apiFetch('/stamp/today');
-                    const fLast = f.stamps && f.stamps.length ? f.stamps[f.stamps.length - 1] : null;
-                    updateStampUI(f.todayMinutes, f.balance, fLast);
-                } catch {}
-            }, 30000);
-        }
+        if (isStampedIn) startTodayTicker();
+        else stopTodayTicker();
     } catch (err) {
         stampSpinner.classList.add('hidden');
         showStampWarning('Fehler: ' + err.message);
@@ -462,8 +609,8 @@ btnStamp.addEventListener('click', async () => {
 
 // ── History ─────────────────────────────────────────────────
 async function loadHistory() {
-    const from = historyFrom.value;
-    const to = historyTo.value;
+    const from = displayToIso(historyFrom.value);
+    const to = displayToIso(historyTo.value);
     if (!from || !to) return;
 
     try {
@@ -484,6 +631,7 @@ const thSortDate = document.getElementById('th-sort-date');
 thSortDate.addEventListener('click', () => {
     historySortDir = historySortDir === 'desc' ? 'asc' : 'desc';
     thSortDate.className = `th-sortable th-sort-${historySortDir}`;
+    thSortDate.setAttribute('aria-sort', historySortDir === 'desc' ? 'descending' : 'ascending');
     renderHistory(historyStampsCache);
 });
 
@@ -598,7 +746,7 @@ btnOpenModal.addEventListener('click', () => {
     cuEmailHint.textContent = '';
     cuEmailHint.className = 'form-hint';
     populateDropdowns();
-    modal.classList.remove('hidden');
+    openModalA11y(modal);
 });
 
 btnCloseModal.addEventListener('click', closeModal);
@@ -606,7 +754,7 @@ btnCancelModal.addEventListener('click', closeModal);
 document.querySelector('.modal-backdrop')?.addEventListener('click', closeModal);
 
 function closeModal() {
-    modal.classList.add('hidden');
+    closeModalA11y(modal);
 }
 
 let emailCheckTimer = null;
@@ -729,7 +877,7 @@ window._editUser = function (id) {
             euSupervisor.innerHTML += `<option value="${u.id}"${u.id === user.supervisor_id ? ' selected' : ''}>${esc(u.first_name)} ${esc(u.last_name)}</option>`;
         });
 
-    editModal.classList.remove('hidden');
+    openModalA11y(editModal);
 };
 
 document.getElementById('btn-close-edit-modal').addEventListener('click', closeEditModal);
@@ -737,7 +885,7 @@ document.getElementById('btn-cancel-edit-modal').addEventListener('click', close
 document.querySelector('.modal-backdrop-edit')?.addEventListener('click', closeEditModal);
 
 function closeEditModal() {
-    editModal.classList.add('hidden');
+    closeModalA11y(editModal);
 }
 
 let editEmailTimer = null;
@@ -861,6 +1009,8 @@ async function loadVacation() {
         document.getElementById('vacation-remaining').textContent = data.remainingDays;
         const pct = data.totalDays > 0 ? Math.min((data.usedDays / data.totalDays) * 100, 100) : 0;
         document.getElementById('vacation-bar').style.width = `${pct}%`;
+        const barWrap = document.getElementById('vacation-bar-wrap');
+        if (barWrap) barWrap.setAttribute('aria-valuenow', Math.round(pct));
         const pendingEl = document.getElementById('vacation-pending-text');
         pendingEl.textContent = data.pendingRequests > 0 ? `${data.pendingRequests} offene(r) Urlaubsantrag/-anträge` : '';
     } catch (err) { console.error(err); }
@@ -903,15 +1053,116 @@ document.getElementById('btn-create-group').addEventListener('click', async () =
     } catch (err) { alert('Fehler: ' + err.message); }
 });
 
-window._deleteGroup = async function (id, name, memberCount) {
-    let msg = `Gruppe "${name}" wirklich löschen?`;
-    if (memberCount > 0) msg += `\n\n${memberCount} Mitglieder werden keiner Gruppe mehr zugeordnet.`;
-    if (!confirm(msg)) return;
-    try {
-        await apiFetch(`/admin/groups/${id}`, { method: 'DELETE' });
-        loadGroupsPage();
-    } catch (err) { alert('Fehler: ' + err.message); }
+const deleteGroupModal      = document.getElementById('modal-delete-group');
+const deleteGroupMessage    = document.getElementById('delete-group-message');
+const deleteGroupOptions    = document.getElementById('delete-group-options');
+const deleteGroupTargetWrap = document.getElementById('delete-group-target-wrap');
+const deleteGroupTarget     = document.getElementById('delete-group-target');
+const deleteGroupError      = document.getElementById('delete-group-error');
+const btnConfirmDeleteGroup = document.getElementById('btn-confirm-delete-group');
+const btnCancelDeleteGroup  = document.getElementById('btn-cancel-delete-group');
+const btnCloseDeleteGroup   = document.getElementById('btn-close-delete-group-modal');
+
+let deleteGroupCtx = null; // { id, memberCount }
+
+function closeDeleteGroupModal() {
+    closeModalA11y(deleteGroupModal);
+    deleteGroupCtx = null;
+}
+
+function updateDeleteGroupConfirmState() {
+    if (!deleteGroupCtx) return;
+    if (deleteGroupCtx.memberCount === 0) {
+        btnConfirmDeleteGroup.disabled = false;
+        return;
+    }
+    const choice = document.querySelector('input[name="delete-group-action"]:checked');
+    if (!choice) {
+        btnConfirmDeleteGroup.disabled = true;
+        return;
+    }
+    if (choice.value === 'move') {
+        btnConfirmDeleteGroup.disabled = !deleteGroupTarget.value;
+    } else {
+        btnConfirmDeleteGroup.disabled = false;
+    }
+}
+
+window._deleteGroup = function (id, name, memberCount) {
+    deleteGroupCtx = { id, memberCount };
+    deleteGroupError.classList.add('hidden');
+    deleteGroupError.textContent = '';
+    btnConfirmDeleteGroup.disabled = true;
+
+    // Radios zurücksetzen
+    document.querySelectorAll('input[name="delete-group-action"]').forEach(r => { r.checked = false; });
+    deleteGroupTargetWrap.classList.add('hidden');
+    deleteGroupTarget.value = '';
+
+    if (memberCount === 0) {
+        // SCRUM-324: leere Gruppen direkt löschbar
+        deleteGroupMessage.textContent = `Gruppe "${name}" löschen? Keine Mitarbeiter sind zugeordnet.`;
+        deleteGroupOptions.classList.add('hidden');
+        btnConfirmDeleteGroup.disabled = false;
+    } else {
+        deleteGroupMessage.textContent = `Gruppe "${name}" löschen? ${memberCount} Mitarbeiter ${memberCount === 1 ? 'ist' : 'sind'} zugeordnet.`;
+        deleteGroupOptions.classList.remove('hidden');
+
+        // Dropdown füllen mit verfügbaren Gruppen (außer der zu löschenden)
+        const others = allGroups.filter(g => g.id !== id);
+        deleteGroupTarget.innerHTML = '<option value="">-- Bitte wählen --</option>' +
+            others.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('');
+    }
+
+    openModalA11y(deleteGroupModal);
 };
+
+document.querySelectorAll('input[name="delete-group-action"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+        if (radio.value === 'move' && radio.checked) {
+            deleteGroupTargetWrap.classList.remove('hidden');
+        } else {
+            deleteGroupTargetWrap.classList.add('hidden');
+        }
+        updateDeleteGroupConfirmState();
+    });
+});
+
+deleteGroupTarget.addEventListener('change', updateDeleteGroupConfirmState);
+
+btnCancelDeleteGroup.addEventListener('click', closeDeleteGroupModal);
+btnCloseDeleteGroup.addEventListener('click', closeDeleteGroupModal);
+deleteGroupModal.querySelector('.modal-backdrop').addEventListener('click', closeDeleteGroupModal);
+
+btnConfirmDeleteGroup.addEventListener('click', async () => {
+    if (!deleteGroupCtx) return;
+    const { id, memberCount } = deleteGroupCtx;
+
+    let targetGroupId = null;
+    if (memberCount > 0) {
+        const choice = document.querySelector('input[name="delete-group-action"]:checked');
+        if (!choice) return;
+        if (choice.value === 'move') {
+            const v = deleteGroupTarget.value;
+            if (!v) return;
+            targetGroupId = Number(v);
+        }
+    }
+
+    btnConfirmDeleteGroup.disabled = true;
+    try {
+        await apiFetch(`/admin/groups/${id}`, {
+            method: 'DELETE',
+            body: JSON.stringify({ targetGroupId })
+        });
+        closeDeleteGroupModal();
+        loadGroupsPage();
+    } catch (err) {
+        deleteGroupError.textContent = 'Fehler: ' + err.message;
+        deleteGroupError.classList.remove('hidden');
+        updateDeleteGroupConfirmState();
+    }
+});
 
 // ── Team Page ───────────────────────────────────────────────
 async function loadTeamPage() {
@@ -976,6 +1227,15 @@ const typeLabels = {
     gleitzeit: 'Gleitzeit',
     homeoffice: 'Homeoffice',
     krank: 'Krank',
+    sonderurlaub: 'Sonderurlaub',
+};
+
+const reasonLabels = {
+    hochzeit: 'Hochzeit',
+    geburt: 'Geburt',
+    trauerfall: 'Trauerfall',
+    umzug: 'Umzug',
+    sonstiges: 'Sonstiges',
 };
 
 const statusLabels = {
@@ -989,44 +1249,67 @@ function openRequestModal() {
     newRequestSuccess.classList.add('hidden');
     document.getElementById('req-date-hint').classList.add('hidden');
     document.getElementById('req-type').value = 'urlaub';
-    // Heute als Mindestdatum setzen
-    const today = new Date().toISOString().split('T')[0];
     const reqFrom = document.getElementById('req-from');
     const reqTo   = document.getElementById('req-to');
     reqFrom.value = '';
     reqTo.value   = '';
-    reqFrom.min   = today;
-    reqTo.min     = today;
     document.getElementById('req-note').value = '';
-    requestModal.classList.remove('hidden');
+    // Sonderurlaub-Felder zurücksetzen
+    document.getElementById('req-reason').value = '';
+    updateReasonVisibility();
+    openModalA11y(requestModal);
 }
 
 function closeRequestModal() {
-    requestModal.classList.add('hidden');
+    closeModalA11y(requestModal);
 }
+
+// Anlass-Feld nur bei Sonderurlaub einblenden, Notiz-Pflicht bei "Sonstiges"
+function updateReasonVisibility() {
+    const type = document.getElementById('req-type').value;
+    const reasonGroup = document.getElementById('req-reason-group');
+    const reason = document.getElementById('req-reason').value;
+    const noteLabel = document.getElementById('req-note-label');
+    const noteInput = document.getElementById('req-note');
+    const noteHint  = document.getElementById('req-note-hint-required');
+
+    if (type === 'sonderurlaub') {
+        reasonGroup.classList.remove('hidden');
+    } else {
+        reasonGroup.classList.add('hidden');
+    }
+
+    // Notiz wird zur Pflicht, wenn Sonderurlaub + Anlass = sonstiges
+    if (type === 'sonderurlaub' && reason === 'sonstiges') {
+        noteLabel.textContent = 'Begründung *';
+        noteInput.placeholder = 'Bitte Anlass kurz erläutern…';
+        noteHint.classList.remove('hidden');
+    } else {
+        noteLabel.textContent = 'Notiz';
+        noteInput.placeholder = 'Optional – z.B. Reiseziel, Arzttermin …';
+        noteHint.classList.add('hidden');
+    }
+}
+
+document.getElementById('req-type').addEventListener('change', updateReasonVisibility);
+document.getElementById('req-reason').addEventListener('change', updateReasonVisibility);
 
 btnNewRequest.addEventListener('click', openRequestModal);
 btnCloseRequestModal.addEventListener('click', closeRequestModal);
 btnCancelRequestModal.addEventListener('click', closeRequestModal);
 document.querySelector('.modal-backdrop-request')?.addEventListener('click', closeRequestModal);
 
-// Datum-Von → Datum-Bis Mindest-Sync
-document.getElementById('req-from').addEventListener('change', () => {
-    const from = document.getElementById('req-from').value;
-    const reqTo = document.getElementById('req-to');
-    if (from) {
-        reqTo.min = from;
-        if (reqTo.value && reqTo.value < from) reqTo.value = from;
-    }
-    validateReqDates();
-});
-document.getElementById('req-to').addEventListener('change', validateReqDates);
+// Datum-Von → Datum-Bis Validierung
+document.getElementById('req-from').addEventListener('input', validateReqDates);
+document.getElementById('req-to').addEventListener('input', validateReqDates);
 
 function validateReqDates() {
-    const from = document.getElementById('req-from').value;
-    const to   = document.getElementById('req-to').value;
+    const fromStr = document.getElementById('req-from').value;
+    const toStr   = document.getElementById('req-to').value;
     const hint = document.getElementById('req-date-hint');
-    if (from && to && to < from) {
+    const fromIso = displayToIso(fromStr);
+    const toIso   = displayToIso(toStr);
+    if (fromIso && toIso && toIso < fromIso) {
         hint.textContent = 'Das Enddatum muss nach dem Startdatum liegen.';
         hint.classList.remove('hidden');
         return false;
@@ -1040,13 +1323,14 @@ btnSubmitRequest.addEventListener('click', async () => {
     newRequestSuccess.classList.add('hidden');
 
     const type     = document.getElementById('req-type').value;
-    const dateFrom = document.getElementById('req-from').value;
-    const dateTo   = document.getElementById('req-to').value;
+    const reason   = document.getElementById('req-reason').value;
+    const dateFrom = displayToIso(document.getElementById('req-from').value);
+    const dateTo   = displayToIso(document.getElementById('req-to').value);
     const note     = document.getElementById('req-note').value.trim();
 
     // Client-seitige Validierung
     if (!dateFrom || !dateTo) {
-        newRequestError.textContent = 'Bitte Start- und Enddatum angeben.';
+        newRequestError.textContent = 'Bitte Start- und Enddatum im Format dd.mm.yy angeben.';
         newRequestError.classList.remove('hidden');
         return;
     }
@@ -1055,6 +1339,19 @@ btnSubmitRequest.addEventListener('click', async () => {
         newRequestError.classList.remove('hidden');
         return;
     }
+    // Sonderurlaub-Validierung
+    if (type === 'sonderurlaub') {
+        if (!reason) {
+            newRequestError.textContent = 'Bitte einen Anlass für den Sonderurlaub auswählen.';
+            newRequestError.classList.remove('hidden');
+            return;
+        }
+        if (reason === 'sonstiges' && !note) {
+            newRequestError.textContent = 'Bei Anlass „Sonstiges" ist eine Begründung im Notizfeld erforderlich.';
+            newRequestError.classList.remove('hidden');
+            return;
+        }
+    }
 
     btnSubmitRequest.disabled = true;
     btnSubmitRequest.textContent = 'Wird gesendet...';
@@ -1062,7 +1359,13 @@ btnSubmitRequest.addEventListener('click', async () => {
     try {
         await apiFetch('/requests', {
             method: 'POST',
-            body: JSON.stringify({ type, dateFrom, dateTo, note: note || undefined }),
+            body: JSON.stringify({
+                type,
+                dateFrom,
+                dateTo,
+                note: note || undefined,
+                reason: type === 'sonderurlaub' ? reason : undefined,
+            }),
         });
         newRequestSuccess.textContent = 'Antrag erfolgreich eingereicht! Dein Vorgesetzter wurde benachrichtigt.';
         newRequestSuccess.classList.remove('hidden');
@@ -1091,6 +1394,16 @@ async function loadMyRequests() {
     }
 }
 
+// Helfer: Typ-Badge mit Farbe + ggf. Anlass bei Sonderurlaub
+function renderTypeBadge(r) {
+    const label = typeLabels[r.type] || r.type;
+    const cls   = `badge badge-type type-${r.type}`;
+    if (r.type === 'sonderurlaub' && r.reason) {
+        return `<span class="${cls}">${esc(label)} – ${esc(reasonLabels[r.reason] || r.reason)}</span>`;
+    }
+    return `<span class="${cls}">${esc(label)}</span>`;
+}
+
 function renderMyRequests(requests) {
     if (!requests || requests.length === 0) {
         requestsTable.classList.add('hidden');
@@ -1112,7 +1425,7 @@ function renderMyRequests(requests) {
             : '';
         return `
             <tr>
-                <td>${esc(typeLabels[r.type] || r.type)}</td>
+                <td>${renderTypeBadge(r)}</td>
                 <td>${zeitraum}</td>
                 <td><span class="badge ${statusClass}">${statusLabel}</span></td>
                 <td>${bearbeiter}</td>
@@ -1138,15 +1451,33 @@ window._withdrawRequest = async function(id) {
 let allRequestsData = [];   // cache für client-seitiges Filtern
 let pendingRequestsData = [];
 
-// Tab-Switching
+// Tab-Switching (mit ARIA-Unterstützung)
 document.querySelectorAll('.req-tab').forEach(tab => {
     tab.addEventListener('click', () => {
-        document.querySelectorAll('.req-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.req-tab').forEach(t => {
+            t.classList.remove('active');
+            t.setAttribute('aria-selected', 'false');
+        });
         tab.classList.add('active');
+        tab.setAttribute('aria-selected', 'true');
         const target = tab.dataset.tab;
         document.getElementById('req-panel-pending').classList.toggle('hidden', target !== 'pending');
         document.getElementById('req-panel-all').classList.toggle('hidden', target !== 'all');
         document.getElementById('req-panel-corrections').classList.toggle('hidden', target !== 'corrections');
+    });
+
+    // Pfeiltasten-Navigation für Tabs
+    tab.addEventListener('keydown', (e) => {
+        const tabs = Array.from(document.querySelectorAll('.req-tab'));
+        const idx = tabs.indexOf(tab);
+        let newIdx = -1;
+        if (e.key === 'ArrowRight') newIdx = (idx + 1) % tabs.length;
+        else if (e.key === 'ArrowLeft') newIdx = (idx - 1 + tabs.length) % tabs.length;
+        if (newIdx >= 0) {
+            e.preventDefault();
+            tabs[newIdx].focus();
+            tabs[newIdx].click();
+        }
     });
 });
 
@@ -1210,7 +1541,7 @@ function renderPendingRequests(requests) {
         return `
             <tr>
                 <td><strong>${esc(r.user_name)}</strong></td>
-                <td>${esc(typeLabels[r.type] || r.type)}</td>
+                <td>${renderTypeBadge(r)}</td>
                 <td>${zeitraum}</td>
                 <td>${r.note ? esc(r.note) : '<span class="text-muted">–</span>'}</td>
                 <td class="actions-cell">
@@ -1257,7 +1588,7 @@ function renderAllRequests(requests) {
         return `
             <tr>
                 <td>${esc(r.user_name)}</td>
-                <td>${esc(typeLabels[r.type] || r.type)}</td>
+                <td>${renderTypeBadge(r)}</td>
                 <td>${zeitraum}</td>
                 <td><span class="badge ${statusClass}">${statusLabel}</span></td>
                 <td>${bearbeiter}</td>
@@ -1364,17 +1695,27 @@ window._reviewCorrection = async function(id, status) {
 // ── SCRUM-44: Geräte-Überwachung ─────────────────────────────
 
 let devicesRefreshTimer = null;
+let allDevicesData = [];
 
 async function loadDevicesPage() {
-    await loadDevices();
+    await Promise.all([loadDevices(), loadUsersForDevices()]);
+    populateDeviceDropdowns();
+    renderNfcTable();
+    setupNfcListeners();
     clearInterval(devicesRefreshTimer);
-    devicesRefreshTimer = setInterval(loadDevices, 30000);
+    devicesRefreshTimer = setInterval(loadDevices, 15000);
+}
+
+async function loadUsersForDevices() {
+    if (!allUsers.length) {
+        try { allUsers = await apiFetch('/admin/users'); } catch {}
+    }
 }
 
 async function loadDevices() {
     try {
-        const devices = await apiFetch('/admin/devices');
-        renderDevicesTable(devices);
+        allDevicesData = await apiFetch('/admin/devices');
+        renderDevicesTable(allDevicesData);
     } catch (err) {
         console.error('Fehler beim Laden der Geräte:', err);
     }
@@ -1419,23 +1760,133 @@ function renderDevicesTable(devices) {
                 <td>${esc(d.location || '–')}</td>
                 <td>${statusBadge}</td>
                 <td>${formatLastSeen(d.last_seen)}</td>
+                <td class="actions-cell">
+                    <button class="btn btn-sm ${d.active ? 'btn-danger' : 'btn-success'}" onclick="window._toggleDevice('${esc(d.id)}', ${d.active})">${d.active ? 'Deaktivieren' : 'Aktivieren'}</button>
+                    <button class="btn btn-sm btn-danger" onclick="window._deleteDevice('${esc(d.id)}', '${esc(d.name)}')">Löschen</button>
+                </td>
             </tr>
         `;
     }).join('');
 }
 
+function populateDeviceDropdowns() {
+    const deviceSelect = document.getElementById('assign-device');
+    const userSelect = document.getElementById('assign-user');
+    if (!deviceSelect || !userSelect) return;
+
+    deviceSelect.innerHTML = '<option value="">-- Gerät wählen --</option>' +
+        allDevicesData.filter(d => d.active).map(d => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('');
+
+    const usersWithoutNfc = allUsers.filter(u => u.active && !u.nfc_uid);
+    userSelect.innerHTML = '<option value="">-- Mitarbeiter wählen --</option>' +
+        usersWithoutNfc.map(u => `<option value="${u.id}">${esc(u.first_name)} ${esc(u.last_name)}</option>`).join('');
+}
+
+function renderNfcTable() {
+    const tbody = document.getElementById('nfc-tbody');
+    const empty = document.getElementById('nfc-empty');
+    const table = document.getElementById('nfc-table');
+    if (!tbody) return;
+    const usersWithNfc = allUsers.filter(u => u.nfc_uid);
+
+    if (!usersWithNfc.length) {
+        table.classList.add('hidden');
+        empty.classList.remove('hidden');
+        return;
+    }
+    table.classList.remove('hidden');
+    empty.classList.add('hidden');
+
+    tbody.innerHTML = usersWithNfc.map(u => `
+        <tr>
+            <td>${esc(u.first_name)} ${esc(u.last_name)}</td>
+            <td><code>${esc(u.nfc_uid)}</code></td>
+            <td><button class="btn btn-sm btn-danger" onclick="window._removeNfc(${u.id}, '${esc(u.first_name)} ${esc(u.last_name)}')">Entfernen</button></td>
+        </tr>
+    `).join('');
+}
+
+let nfcListenersSet = false;
+function setupNfcListeners() {
+    if (nfcListenersSet) return;
+    nfcListenersSet = true;
+
+    document.getElementById('btn-assign-nfc')?.addEventListener('click', async () => {
+        const deviceId = document.getElementById('assign-device').value;
+        const userId = document.getElementById('assign-user').value;
+        const statusEl = document.getElementById('assign-status');
+
+        if (!deviceId || !userId) {
+            statusEl.className = 'alert alert-error';
+            statusEl.textContent = 'Bitte Gerät und Mitarbeiter auswählen.';
+            statusEl.classList.remove('hidden');
+            return;
+        }
+
+        try {
+            await apiFetch(`/admin/devices/${deviceId}/assign`, {
+                method: 'PUT',
+                body: JSON.stringify({ userId: parseInt(userId) }),
+            });
+            statusEl.className = 'alert alert-success';
+            statusEl.textContent = 'Zuweisungsmodus aktiv — jetzt NFC-Karte an das Gerät halten.';
+            statusEl.classList.remove('hidden');
+        } catch (err) {
+            statusEl.className = 'alert alert-error';
+            statusEl.textContent = err.message;
+            statusEl.classList.remove('hidden');
+        }
+    });
+}
+
+window._toggleDevice = async function(id, currentActive) {
+    try {
+        await apiFetch(`/admin/devices/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ active: !currentActive }),
+        });
+        await loadDevices();
+        populateDeviceDropdowns();
+    } catch (err) {
+        alert('Fehler: ' + err.message);
+    }
+};
+
+window._deleteDevice = async function(id, name) {
+    if (!confirm(`Gerät "${name}" wirklich löschen?`)) return;
+    try {
+        await apiFetch(`/admin/devices/${id}`, { method: 'DELETE' });
+        await loadDevices();
+        populateDeviceDropdowns();
+    } catch (err) {
+        alert('Fehler: ' + err.message);
+    }
+};
+
+window._removeNfc = async function(userId, name) {
+    if (!confirm(`NFC-Tag von "${name}" wirklich entfernen?`)) return;
+    try {
+        await apiFetch(`/admin/users/${userId}/nfc`, { method: 'PUT' });
+        allUsers = await apiFetch('/admin/users');
+        populateDeviceDropdowns();
+        renderNfcTable();
+    } catch (err) {
+        alert('Fehler: ' + err.message);
+    }
+};
+
 const modalCreateDevice = document.getElementById('modal-create-device');
 const formCreateDevice = document.getElementById('form-create-device');
 
 function closeDeviceModal() {
-    if (modalCreateDevice) modalCreateDevice.classList.add('hidden');
+    if (modalCreateDevice) closeModalA11y(modalCreateDevice);
 }
 
 document.getElementById('btn-open-create-device')?.addEventListener('click', () => {
     formCreateDevice?.reset();
     document.getElementById('create-device-error')?.classList.add('hidden');
     document.getElementById('create-device-success')?.classList.add('hidden');
-    modalCreateDevice?.classList.remove('hidden');
+    if (modalCreateDevice) openModalA11y(modalCreateDevice);
 });
 
 document.getElementById('btn-close-device-modal')?.addEventListener('click', closeDeviceModal);

@@ -46,31 +46,38 @@ CREATE TABLE time_limits (
 
 CREATE TABLE timestamps_log (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
+    user_id INT DEFAULT NULL,
     type ENUM('in','out') NOT NULL,
     stamp_time DATETIME NOT NULL,
     source ENUM('arduino','web','app') DEFAULT 'web',
     device_id VARCHAR(50) DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_user_time (user_id, stamp_time)
 );
 
 CREATE TABLE requests (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    type ENUM('urlaub','gleitzeit','homeoffice','krank') NOT NULL,
+    user_id INT DEFAULT NULL,
+    type ENUM('urlaub','gleitzeit','homeoffice','krank','sonderurlaub') NOT NULL,
     date_from DATE NOT NULL,
     date_to DATE NOT NULL,
     note TEXT DEFAULT NULL,
+    -- Anlass nur bei type='sonderurlaub' relevant; bei 'sonstiges' MUSS note gefüllt sein (Freitext)
+    reason ENUM('hochzeit','geburt','trauerfall','umzug','sonstiges') DEFAULT NULL,
     status ENUM('pending','approved','denied') DEFAULT 'pending',
     reviewed_by INT DEFAULT NULL,
     reviewed_at DATETIME DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
     FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_user_status (user_id, status)
 );
+
+-- Migration für bestehende Datenbanken (separat ausführen, falls die Tabelle schon existiert):
+-- ALTER TABLE requests
+--   MODIFY COLUMN type ENUM('urlaub','gleitzeit','homeoffice','krank','sonderurlaub') NOT NULL,
+--   ADD COLUMN reason ENUM('hochzeit','geburt','trauerfall','umzug','sonstiges') DEFAULT NULL AFTER note;
 
 CREATE TABLE devices (
     id VARCHAR(50) PRIMARY KEY,
@@ -85,16 +92,16 @@ CREATE TABLE devices (
 
 CREATE TABLE vacation_entitlements (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
+    user_id INT DEFAULT NULL,
     year INT NOT NULL,
     total_days INT NOT NULL DEFAULT 30,
     UNIQUE KEY unique_user_year (user_id, year),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE TABLE corrections (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
+    user_id INT DEFAULT NULL,
     stamp_id INT DEFAULT NULL,
     type ENUM('add','edit','delete') NOT NULL,
     original_time DATETIME DEFAULT NULL,
@@ -105,7 +112,7 @@ CREATE TABLE corrections (
     reviewed_by INT DEFAULT NULL,
     reviewed_at DATETIME DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
     FOREIGN KEY (stamp_id) REFERENCES timestamps_log(id) ON DELETE SET NULL,
     FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_corr_status (user_id, status)
