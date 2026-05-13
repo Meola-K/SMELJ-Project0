@@ -350,13 +350,25 @@ router.put('/work-rules/:userId', auth, role('admin'), async (req, res) => {
         }
 
         if (limits) {
+            // 0 ist ein gültiger Wert (z.B. keine Überstunden erlaubt). Daher kein || Default,
+            // sondern nur Fallback bei null/undefined/''.
+            const toMin = (v, def) => {
+                if (v === null || v === undefined || v === '') return def;
+                const n = Number(v);
+                return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : def;
+            };
             await db.query(
                 `INSERT INTO time_limits (user_id, max_weekly_minutes, max_overtime_minutes, max_undertime_minutes)
                  VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE
                  max_weekly_minutes = VALUES(max_weekly_minutes),
                  max_overtime_minutes = VALUES(max_overtime_minutes),
                  max_undertime_minutes = VALUES(max_undertime_minutes)`,
-                [userId, Math.max(0, limits.maxWeeklyMinutes || 2400), Math.max(0, limits.maxOvertimeMinutes || 720), Math.max(0, limits.maxUndertimeMinutes || 240)]
+                [
+                    userId,
+                    toMin(limits.maxWeeklyMinutes, 2400),
+                    toMin(limits.maxOvertimeMinutes, 720),
+                    toMin(limits.maxUndertimeMinutes, 240)
+                ]
             );
         }
 
@@ -681,6 +693,202 @@ router.post('/corrections', auth, async (req, res) => {
         }
 
         res.json({ id: result.insertId, message: 'Korrekturantrag eingereicht' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+// ── SCRUM-211/212: Abwesenheitsbericht – JSON-Vorschau & CSV-Export ──────────
+// GET /api/admin/export/absences?from=YYYY-MM-DD&to=YYYY-MM-DD
+//                                &type=urlaub|...  (optional)
+//                                &groupId=<int>    (optional, Abteilung)
+//                                &status=approved|pending|denied (optional)
+//                                &format=csv|json (default: json)
+
+const ABSENCE_TYPES = ['urlaub', 'gleitzeit', 'homeoffice', 'krank', 'sonderurlaub'];
+const ABSENCE_STATUSES = ['pending', 'approved', 'denied'];
+const TYPE_LABELS_DE = {
+    urlaub: 'Urlaub', gleitzeit: 'Gleitzeit', homeoffice: 'Homeoffice',
+    krank: 'Krank', sonderurlaub: 'Sonderurlaub'
+};
+const REASON_LABELS_DE = {
+    hochzeit: 'Hochzeit', geburt: 'Geburt', trauerfall: 'Trauerfall',
+    umzug: 'Umzug', sonstiges: 'Sonstiges'
+};
+const STATUS_LABELS_DE = {
+    pending: 'Ausstehend', approved: 'Genehmigt', denied: 'Abgelehnt'
+};
+
+function countWorkdays(from, to) {
+    let days = 0;
+    const d = new Date(from);
+    const end = new Date(to);
+    // Auf Mitternacht UTC normalisieren, damit DST keine Endlosschleifen baut
+    d.setHours(12, 0, 0, 0);
+    end.setHours(12, 0, 0, 0);
+    while (d <= end) {
+        const dow = d.getDay();
+        if (dow !== 0 && dow !== 6) days++;
+        d.setDate(d.getDate() + 1);
+    }
+    return days;
+}
+
+function formatDateDe(value) {
+    if (!value) return '';
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return '';
+    return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+}
+
+function formatDateTimeDe(value) {
+    if (!value) return '';
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return '';
+    return `${formatDateDe(d)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+// RFC4180-konformes Escapen + Schutz vor CSV-Injection (führendes =, +, -, @)
+function csvEscape(value) {
+    if (value === null || value === undefined) return '';
+    let s = String(value);
+    // CSV-Injection-Schutz: gefährliche Steuerzeichen am Zeilenanfang neutralisieren
+    if (/^[=+\-@]/.test(s)) s = "'" + s;
+    if (s.includes(';') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+}
+
+function buildAbsenceCsv(rows) {
+    const headers = [
+        'Mitarbeiter', 'E-Mail', 'Abteilung', 'Typ', 'Anlass',
+        'Von', 'Bis', 'Werktage', 'Status', 'Notiz',
+        'Bearbeitet von', 'Bearbeitet am', 'Eingereicht am'
+    ];
+    // Semikolon als Trenner: deutsche Excel-Locale öffnet das ohne Importdialog korrekt.
+    const SEP = ';';
+    const lines = [headers.map(csvEscape).join(SEP)];
+    for (const r of rows) {
+        lines.push([
+            r.name,
+            r.email,
+            r.groupName,
+            r.typeLabel,
+            r.reasonLabel,
+            formatDateDe(r.dateFrom),
+            formatDateDe(r.dateTo),
+            r.workdays,
+            r.statusLabel,
+            r.note,
+            r.reviewerName,
+            formatDateTimeDe(r.reviewedAt),
+            formatDateTimeDe(r.createdAt)
+        ].map(csvEscape).join(SEP));
+    }
+    // CRLF gemäß RFC4180 – Excel/Numbers/LibreOffice akzeptieren es alle.
+    return lines.join('\r\n') + '\r\n';
+}
+
+router.get('/export/absences', auth, role('admin'), async (req, res) => {
+    try {
+        const { from, to, type, groupId, status, format } = req.query;
+
+        // Pflicht: from + to
+        if (!from || !to) {
+            return res.status(400).json({ error: 'Zeitraum (from, to) erforderlich' });
+        }
+        // Striktes ISO-Datumsformat verlangen (YYYY-MM-DD)
+        const isoRe = /^\d{4}-\d{2}-\d{2}$/;
+        if (!isoRe.test(from) || !isoRe.test(to)) {
+            return res.status(400).json({ error: 'Datum muss im Format YYYY-MM-DD sein' });
+        }
+        if (new Date(from) > new Date(to)) {
+            return res.status(400).json({ error: 'Startdatum muss vor Enddatum liegen' });
+        }
+        if (type && !ABSENCE_TYPES.includes(type)) {
+            return res.status(400).json({ error: 'Ungültiger Typ' });
+        }
+        if (status && !ABSENCE_STATUSES.includes(status)) {
+            return res.status(400).json({ error: 'Ungültiger Status' });
+        }
+
+        let groupIdNum = null;
+        if (groupId !== undefined && groupId !== '' && groupId !== 'null') {
+            const n = Number(groupId);
+            if (!Number.isInteger(n) || n <= 0) {
+                return res.status(400).json({ error: 'Ungültige Abteilungs-ID' });
+            }
+            groupIdNum = n;
+        }
+
+        const wantsCsv = (format || '').toLowerCase() === 'csv';
+
+        // Anträge holen, die sich mit dem Filter-Zeitraum überlappen.
+        const where = ['r.date_from <= ?', 'r.date_to >= ?'];
+        const params = [to, from];
+        if (type) { where.push('r.type = ?'); params.push(type); }
+        if (groupIdNum !== null) { where.push('u.group_id = ?'); params.push(groupIdNum); }
+        if (status) { where.push('r.status = ?'); params.push(status); }
+
+        const query = `
+            SELECT r.id, r.type, r.date_from, r.date_to, r.note, r.reason,
+                   r.status, r.created_at, r.reviewed_at,
+                   u.first_name, u.last_name, u.email,
+                   g.name AS group_name,
+                   CONCAT(rv.first_name, ' ', rv.last_name) AS reviewer_name
+            FROM requests r
+            JOIN users u ON r.user_id = u.id
+            LEFT JOIN groups_table g ON u.group_id = g.id
+            LEFT JOIN users rv ON r.reviewed_by = rv.id
+            WHERE ${where.join(' AND ')}
+            ORDER BY r.date_from ASC, u.last_name ASC, u.first_name ASC
+        `;
+        const [rows] = await db.query(query, params);
+
+        const enriched = rows.map(r => ({
+            id: r.id,
+            name: `${r.first_name || ''} ${r.last_name || ''}`.trim(),
+            email: r.email || '',
+            groupName: r.group_name || '',
+            type: r.type,
+            typeLabel: TYPE_LABELS_DE[r.type] || r.type,
+            reason: r.reason || null,
+            reasonLabel: r.reason ? (REASON_LABELS_DE[r.reason] || r.reason) : '',
+            dateFrom: r.date_from,
+            dateTo: r.date_to,
+            workdays: countWorkdays(r.date_from, r.date_to),
+            status: r.status,
+            statusLabel: STATUS_LABELS_DE[r.status] || r.status,
+            note: r.note || '',
+            reviewerName: r.reviewer_name || '',
+            reviewedAt: r.reviewed_at,
+            createdAt: r.created_at
+        }));
+
+        if (wantsCsv) {
+            const csv = buildAbsenceCsv(enriched);
+            const safeFrom = from.replace(/[^0-9-]/g, '');
+            const safeTo = to.replace(/[^0-9-]/g, '');
+            const filename = `abwesenheiten_${safeFrom}_${safeTo}.csv`;
+            res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+            res.setHeader('Cache-Control', 'no-store');
+            // UTF-8 BOM, damit Excel-DE Umlaute korrekt erkennt
+            return res.send('\uFEFF' + csv);
+        }
+
+        return res.json({
+            count: enriched.length,
+            rows: enriched,
+            filter: {
+                from, to,
+                type: type || null,
+                groupId: groupIdNum,
+                status: status || null
+            }
+        });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Serverfehler' });

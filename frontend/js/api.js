@@ -19,15 +19,40 @@ async function apiFetch(path, options = {}) {
 
     const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
-    // 401 → Token abgelaufen oder ungültig → Auto-Logout
-    if (res.status === 401) {
-        clearToken();
-        window.dispatchEvent(new CustomEvent('auth:logout', { detail: { reason: 'session_expired' } }));
-        throw new Error('Sitzung abgelaufen. Bitte erneut anmelden.');
+    // Body parsen – kann fehlen oder Nicht-JSON sein (z.B. CSV-Download im selben Helper)
+    let data = {};
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('application/json')) {
+        try {
+            data = await res.json();
+        } catch {
+            data = {};
+        }
     }
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Serverfehler');
+    if (res.status === 401) {
+        // Nur als "Session abgelaufen" behandeln, wenn ÜBERHAUPT ein Token vorhanden war.
+        // Ohne Token (z.B. POST /auth/login mit falschen Daten) ist 401 ein Login-Fehler
+        // und darf NICHT in den Auto-Logout-Pfad. Sonst kommt die irreführende
+        // 'Sitzung abgelaufen'-Meldung auf der Login-Seite (Bug SCRUM-288).
+        if (token) {
+            clearToken();
+            window.dispatchEvent(new CustomEvent('auth:logout', {
+                detail: { reason: 'session_expired', code: data.code || 'session_expired' }
+            }));
+        }
+        const err = new Error(data.error || 'Nicht autorisiert');
+        err.code = data.code || (token ? 'session_expired' : 'invalid_credentials');
+        err.status = 401;
+        throw err;
+    }
+
+    if (!res.ok) {
+        const err = new Error(data.error || 'Serverfehler');
+        err.code = data.code;
+        err.status = res.status;
+        throw err;
+    }
     return data;
 }
 
