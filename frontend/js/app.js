@@ -151,25 +151,49 @@ registerRoute('requests-overview', {
 
 // ── Login ───────────────────────────────────────────────────
 const formLogin = document.getElementById('form-login');
+
+// SCRUM-288: Backend-Error-Code → deutsche User-Meldung
+function mapAuthErrorCode(code, fallback) {
+    switch (code) {
+        case 'invalid_credentials':  return 'E-Mail oder Passwort falsch.';
+        case 'account_disabled':     return 'Konto deaktiviert, bitte Admin kontaktieren.';
+        case 'missing_credentials':  return 'Bitte E-Mail und Passwort eingeben.';
+        case 'session_expired':      return 'Sitzung abgelaufen, bitte erneut anmelden.';
+        case 'forbidden':            return 'Keine Berechtigung.';
+        default:                     return fallback || 'Anmeldung fehlgeschlagen.';
+    }
+}
+
+function showLoginError(msg) {
+    loginError.textContent = msg;
+    loginError.classList.remove('hidden');
+    loginError.focus();
+}
+
 formLogin.addEventListener('submit', async (e) => {
     e.preventDefault();
     loginError.classList.add('hidden');
+
+    const email = loginEmail.value.trim();
+    const password = loginPassword.value;
+
+    // Clientseitige Vorprüfung – damit der User nicht erst auf den Server warten muss.
+    if (!email || !password) {
+        showLoginError('Bitte E-Mail und Passwort eingeben.');
+        return;
+    }
+
     try {
         const data = await apiFetch('/auth/login', {
             method: 'POST',
-            body: JSON.stringify({
-                email: loginEmail.value.trim(),
-                password: loginPassword.value,
-            }),
+            body: JSON.stringify({ email, password }),
         });
         setToken(data.token);
         currentUser = data.user;
         setupSocket(data.token);
         showApp();
     } catch (err) {
-        loginError.textContent = err.message;
-        loginError.classList.remove('hidden');
-        loginError.focus();
+        showLoginError(mapAuthErrorCode(err.code, err.message));
     }
 });
 
@@ -186,17 +210,18 @@ btnLogout.addEventListener('click', () => {
     window.location.hash = '';
 });
 
-// 401 Auto-Logout (Token abgelaufen oder ungültig)
+// 401 Auto-Logout (Token abgelaufen oder ungültig) – SCRUM-288
 window.addEventListener('auth:logout', (e) => {
     currentUser = null;
     clearInterval(todayTimer);
+    if (window._pendingBadgeTimer) clearInterval(window._pendingBadgeTimer);
+    if (typeof socket !== 'undefined' && socket) { try { socket.disconnect(); } catch {} }
     appShell.classList.add('hidden');
     pageLogin.classList.remove('hidden');
     closeSidebar();
     window.location.hash = '';
     if (e.detail?.reason === 'session_expired') {
-        loginError.textContent = 'Ihre Sitzung ist abgelaufen. Bitte erneut anmelden.';
-        loginError.classList.remove('hidden');
+        showLoginError(mapAuthErrorCode('session_expired'));
     }
 });
 
@@ -653,6 +678,7 @@ function renderUsersTable() {
             <td><span class="badge ${u.active ? 'badge-active' : 'badge-inactive'}">${u.active ? 'Aktiv' : 'Inaktiv'}</span></td>
             <td class="actions-cell">
                 <button class="btn btn-sm" onclick="window._editUser(${u.id})">Bearbeiten</button>
+                <button class="btn btn-sm" onclick="window._editWorkRules(${u.id})">Arbeitsregeln</button>
                 ${u.id !== uid ? (u.active
                     ? `<button class="btn btn-sm btn-danger" onclick="window._deactivateUser(${u.id}, '${esc(u.first_name)} ${esc(u.last_name)}')">Deaktivieren</button>`
                     : `<button class="btn btn-sm btn-success" onclick="window._reactivateUser(${u.id}, '${esc(u.first_name)} ${esc(u.last_name)}')">Aktivieren</button>`
@@ -1177,6 +1203,15 @@ const typeLabels = {
     gleitzeit: 'Gleitzeit',
     homeoffice: 'Homeoffice',
     krank: 'Krank',
+    sonderurlaub: 'Sonderurlaub',
+};
+
+const reasonLabels = {
+    hochzeit: 'Hochzeit',
+    geburt: 'Geburt',
+    trauerfall: 'Trauerfall',
+    umzug: 'Umzug',
+    sonstiges: 'Sonstiges',
 };
 
 const statusLabels = {
@@ -1195,12 +1230,45 @@ function openRequestModal() {
     reqFrom.value = '';
     reqTo.value   = '';
     document.getElementById('req-note').value = '';
+    // Sonderurlaub-Felder zurücksetzen
+    document.getElementById('req-reason').value = '';
+    updateReasonVisibility();
     openModalA11y(requestModal);
 }
 
 function closeRequestModal() {
     closeModalA11y(requestModal);
 }
+
+// Anlass-Feld nur bei Sonderurlaub einblenden, Notiz-Pflicht bei "Sonstiges"
+function updateReasonVisibility() {
+    const type = document.getElementById('req-type').value;
+    const reasonGroup = document.getElementById('req-reason-group');
+    const reason = document.getElementById('req-reason').value;
+    const noteLabel = document.getElementById('req-note-label');
+    const noteInput = document.getElementById('req-note');
+    const noteHint  = document.getElementById('req-note-hint-required');
+
+    if (type === 'sonderurlaub') {
+        reasonGroup.classList.remove('hidden');
+    } else {
+        reasonGroup.classList.add('hidden');
+    }
+
+    // Notiz wird zur Pflicht, wenn Sonderurlaub + Anlass = sonstiges
+    if (type === 'sonderurlaub' && reason === 'sonstiges') {
+        noteLabel.textContent = 'Begründung *';
+        noteInput.placeholder = 'Bitte Anlass kurz erläutern…';
+        noteHint.classList.remove('hidden');
+    } else {
+        noteLabel.textContent = 'Notiz';
+        noteInput.placeholder = 'Optional – z.B. Reiseziel, Arzttermin …';
+        noteHint.classList.add('hidden');
+    }
+}
+
+document.getElementById('req-type').addEventListener('change', updateReasonVisibility);
+document.getElementById('req-reason').addEventListener('change', updateReasonVisibility);
 
 btnNewRequest.addEventListener('click', openRequestModal);
 btnCloseRequestModal.addEventListener('click', closeRequestModal);
@@ -1231,6 +1299,7 @@ btnSubmitRequest.addEventListener('click', async () => {
     newRequestSuccess.classList.add('hidden');
 
     const type     = document.getElementById('req-type').value;
+    const reason   = document.getElementById('req-reason').value;
     const dateFrom = displayToIso(document.getElementById('req-from').value);
     const dateTo   = displayToIso(document.getElementById('req-to').value);
     const note     = document.getElementById('req-note').value.trim();
@@ -1246,6 +1315,19 @@ btnSubmitRequest.addEventListener('click', async () => {
         newRequestError.classList.remove('hidden');
         return;
     }
+    // Sonderurlaub-Validierung
+    if (type === 'sonderurlaub') {
+        if (!reason) {
+            newRequestError.textContent = 'Bitte einen Anlass für den Sonderurlaub auswählen.';
+            newRequestError.classList.remove('hidden');
+            return;
+        }
+        if (reason === 'sonstiges' && !note) {
+            newRequestError.textContent = 'Bei Anlass „Sonstiges" ist eine Begründung im Notizfeld erforderlich.';
+            newRequestError.classList.remove('hidden');
+            return;
+        }
+    }
 
     btnSubmitRequest.disabled = true;
     btnSubmitRequest.textContent = 'Wird gesendet...';
@@ -1253,7 +1335,13 @@ btnSubmitRequest.addEventListener('click', async () => {
     try {
         await apiFetch('/requests', {
             method: 'POST',
-            body: JSON.stringify({ type, dateFrom, dateTo, note: note || undefined }),
+            body: JSON.stringify({
+                type,
+                dateFrom,
+                dateTo,
+                note: note || undefined,
+                reason: type === 'sonderurlaub' ? reason : undefined,
+            }),
         });
         newRequestSuccess.textContent = 'Antrag erfolgreich eingereicht! Dein Vorgesetzter wurde benachrichtigt.';
         newRequestSuccess.classList.remove('hidden');
@@ -1284,6 +1372,16 @@ async function loadMyRequests() {
     }
 }
 
+// Helfer: Typ-Badge mit Farbe + ggf. Anlass bei Sonderurlaub
+function renderTypeBadge(r) {
+    const label = typeLabels[r.type] || r.type;
+    const cls   = `badge badge-type type-${r.type}`;
+    if (r.type === 'sonderurlaub' && r.reason) {
+        return `<span class="${cls}">${esc(label)} – ${esc(reasonLabels[r.reason] || r.reason)}</span>`;
+    }
+    return `<span class="${cls}">${esc(label)}</span>`;
+}
+
 function renderMyRequests(requests) {
     if (!requests || requests.length === 0) {
         requestsTable.classList.add('hidden');
@@ -1305,7 +1403,7 @@ function renderMyRequests(requests) {
             : '';
         return `
             <tr>
-                <td>${esc(typeLabels[r.type] || r.type)}</td>
+                <td>${renderTypeBadge(r)}</td>
                 <td>${zeitraum}</td>
                 <td><span class="badge ${statusClass}">${statusLabel}</span></td>
                 <td>${bearbeiter}</td>
@@ -1421,7 +1519,7 @@ function renderPendingRequests(requests) {
         return `
             <tr>
                 <td><strong>${esc(r.user_name)}</strong></td>
-                <td>${esc(typeLabels[r.type] || r.type)}</td>
+                <td>${renderTypeBadge(r)}</td>
                 <td>${zeitraum}</td>
                 <td>${r.note ? esc(r.note) : '<span class="text-muted">–</span>'}</td>
                 <td class="actions-cell">
@@ -1468,7 +1566,7 @@ function renderAllRequests(requests) {
         return `
             <tr>
                 <td>${esc(r.user_name)}</td>
-                <td>${esc(typeLabels[r.type] || r.type)}</td>
+                <td>${renderTypeBadge(r)}</td>
                 <td>${zeitraum}</td>
                 <td><span class="badge ${statusClass}">${statusLabel}</span></td>
                 <td>${bearbeiter}</td>
@@ -1812,4 +1910,403 @@ formCreateDevice?.addEventListener('submit', async (e) => {
     }
 });
 
+// ── SCRUM-150/152: Arbeitsregeln & Zeitlimits ────────────────
+const rulesModal = document.getElementById('modal-work-rules');
+const rulesUserName = document.getElementById('rules-user-name');
+const rulesTbody = document.getElementById('rules-tbody');
+const rulesError = document.getElementById('rules-error');
+const rulesSuccess = document.getElementById('rules-success');
+const limWeekly = document.getElementById('lim-weekly');
+const limOvertime = document.getElementById('lim-overtime');
+const limUndertime = document.getElementById('lim-undertime');
+const btnSubmitRules = document.getElementById('btn-submit-rules');
+
+const WEEKDAY_LABELS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+let currentRulesUserId = null;
+
+function minutesToHours(min) {
+    if (min === null || min === undefined) return '';
+    return (min / 60).toFixed(2).replace(/\.?0+$/, '');
+}
+
+function hoursToMinutes(hours) {
+    const n = parseFloat(hours);
+    if (!Number.isFinite(n) || n < 0) return 0;
+    return Math.round(n * 60);
+}
+
+function timeToHHMM(t) {
+    if (!t) return '';
+    // Backend liefert "HH:MM:SS"; <input type="time"> erwartet "HH:MM"
+    return String(t).substring(0, 5);
+}
+
+function renderRulesTable(rulesByWeekday) {
+    rulesTbody.innerHTML = WEEKDAY_LABELS.map((label, weekday) => {
+        const rule = rulesByWeekday[weekday] || { weekday, work_allowed: weekday < 5 ? 1 : 0, core_start: null, core_end: null, max_daily_minutes: weekday < 5 ? 480 : 0 };
+        const allowed = !!rule.work_allowed;
+        return `
+            <tr data-weekday="${weekday}">
+                <td class="rule-day-name">${label}</td>
+                <td class="rule-allowed-cell">
+                    <input type="checkbox" class="rule-allowed" ${allowed ? 'checked' : ''} aria-label="${label} Arbeit erlaubt">
+                </td>
+                <td>
+                    <input type="time" class="rule-core-start" value="${timeToHHMM(rule.core_start)}" ${allowed ? '' : 'disabled'}>
+                </td>
+                <td>
+                    <input type="time" class="rule-core-end" value="${timeToHHMM(rule.core_end)}" ${allowed ? '' : 'disabled'}>
+                </td>
+                <td>
+                    <input type="number" class="rule-max-hours" min="0" max="24" step="0.25" value="${minutesToHours(rule.max_daily_minutes)}" ${allowed ? '' : 'disabled'}>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    // Checkbox-Toggle: Felder enabled/disabled
+    rulesTbody.querySelectorAll('.rule-allowed').forEach(cb => {
+        cb.addEventListener('change', (e) => {
+            const tr = e.target.closest('tr');
+            const enable = e.target.checked;
+            tr.querySelectorAll('input[type="time"], input[type="number"]').forEach(inp => {
+                inp.disabled = !enable;
+                if (!enable) inp.value = inp.type === 'number' ? '0' : '';
+            });
+        });
+    });
+}
+
+async function openWorkRulesModal(userId) {
+    currentRulesUserId = userId;
+    const user = allUsers.find(u => u.id === userId);
+    rulesUserName.textContent = user ? `${user.first_name} ${user.last_name}` : `User #${userId}`;
+    rulesError.classList.add('hidden');
+    rulesSuccess.classList.add('hidden');
+
+    try {
+        const data = await apiFetch(`/admin/work-rules/${userId}`);
+        const byWeekday = {};
+        (data.rules || []).forEach(r => { byWeekday[r.weekday] = r; });
+        renderRulesTable(byWeekday);
+
+        const limits = data.limits || {};
+        limWeekly.value = minutesToHours(limits.max_weekly_minutes ?? 2400) || '40';
+        limOvertime.value = minutesToHours(limits.max_overtime_minutes ?? 720) || '12';
+        limUndertime.value = minutesToHours(limits.max_undertime_minutes ?? 240) || '4';
+
+        openModalA11y(rulesModal);
+    } catch (err) {
+        rulesError.textContent = 'Fehler beim Laden: ' + err.message;
+        rulesError.classList.remove('hidden');
+        openModalA11y(rulesModal);
+    }
+}
+
+function closeRulesModal() {
+    closeModalA11y(rulesModal);
+}
+
+async function submitWorkRules() {
+    rulesError.classList.add('hidden');
+    rulesSuccess.classList.add('hidden');
+
+    // Wochentag-Regeln einsammeln
+    const rules = [];
+    rulesTbody.querySelectorAll('tr').forEach(tr => {
+        const weekday = parseInt(tr.dataset.weekday);
+        const allowed = tr.querySelector('.rule-allowed').checked;
+        const coreStart = tr.querySelector('.rule-core-start').value || null;
+        const coreEnd = tr.querySelector('.rule-core-end').value || null;
+        const maxHoursRaw = tr.querySelector('.rule-max-hours').value;
+
+        rules.push({
+            weekday,
+            workAllowed: allowed,
+            coreStart: allowed && coreStart ? coreStart : null,
+            coreEnd: allowed && coreEnd ? coreEnd : null,
+            maxDailyMinutes: allowed ? hoursToMinutes(maxHoursRaw) : 0
+        });
+    });
+
+    // Zeitlimits einsammeln + validieren
+    const weeklyH = parseFloat(limWeekly.value);
+    const overH = parseFloat(limOvertime.value);
+    const underH = parseFloat(limUndertime.value);
+
+    if (!Number.isFinite(weeklyH) || weeklyH < 0) {
+        rulesError.textContent = 'Max. Wochenstunden muss eine Zahl ≥ 0 sein.';
+        rulesError.classList.remove('hidden');
+        return;
+    }
+    if (!Number.isFinite(overH) || overH < 0) {
+        rulesError.textContent = 'Max. Überstunden muss eine Zahl ≥ 0 sein.';
+        rulesError.classList.remove('hidden');
+        return;
+    }
+    if (!Number.isFinite(underH) || underH < 0) {
+        rulesError.textContent = 'Max. Minusstunden muss eine Zahl ≥ 0 sein.';
+        rulesError.classList.remove('hidden');
+        return;
+    }
+
+    const payload = {
+        rules,
+        limits: {
+            maxWeeklyMinutes: hoursToMinutes(weeklyH),
+            maxOvertimeMinutes: hoursToMinutes(overH),
+            maxUndertimeMinutes: hoursToMinutes(underH)
+        }
+    };
+
+    btnSubmitRules.disabled = true;
+    btnSubmitRules.textContent = 'Speichere...';
+    try {
+        await apiFetch(`/admin/work-rules/${currentRulesUserId}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload)
+        });
+        rulesSuccess.textContent = 'Arbeitsregeln und Zeitlimits gespeichert.';
+        rulesSuccess.classList.remove('hidden');
+        setTimeout(() => {
+            closeRulesModal();
+            rulesSuccess.classList.add('hidden');
+        }, 1200);
+    } catch (err) {
+        rulesError.textContent = err.message;
+        rulesError.classList.remove('hidden');
+    } finally {
+        btnSubmitRules.disabled = false;
+        btnSubmitRules.textContent = 'Speichern';
+    }
+}
+
+window._editWorkRules = function (id) {
+    // Sicherstellen, dass allUsers geladen ist (Name im Header)
+    if (!allUsers.length) {
+        loadUsers().then(() => openWorkRulesModal(id));
+    } else {
+        openWorkRulesModal(id);
+    }
+};
+
+document.getElementById('btn-close-rules-modal').addEventListener('click', closeRulesModal);
+document.getElementById('btn-cancel-rules-modal').addEventListener('click', closeRulesModal);
+document.querySelector('.modal-backdrop-rules')?.addEventListener('click', closeRulesModal);
+btnSubmitRules.addEventListener('click', submitWorkRules);
+
 registerRoute('devices', { pageId: 'page-devices', onEnter: loadDevicesPage });
+
+// ── SCRUM-210/211/212: Abwesenheitsbericht ───────────────────
+const reportFrom = document.getElementById('report-from');
+const reportTo = document.getElementById('report-to');
+const reportType = document.getElementById('report-type');
+const reportGroup = document.getElementById('report-group');
+const reportStatus = document.getElementById('report-status');
+const reportError = document.getElementById('report-error');
+const reportSummary = document.getElementById('report-summary');
+const reportEmpty = document.getElementById('report-empty');
+const reportTbody = document.getElementById('report-tbody');
+const btnReportPreview = document.getElementById('btn-report-preview');
+const btnReportExport = document.getElementById('btn-report-export');
+
+// Date-Input-Helper aktivieren (gleicher Mechanismus wie in der History)
+setupDateInput(reportFrom);
+setupDateInput(reportTo);
+
+const REPORT_TYPE_BADGE_CLASS = {
+    urlaub: 'type-urlaub',
+    gleitzeit: 'type-gleitzeit',
+    homeoffice: 'type-homeoffice',
+    krank: 'type-krank',
+    sonderurlaub: 'type-sonderurlaub'
+};
+const REPORT_TYPE_LABELS = {
+    urlaub: 'Urlaub', gleitzeit: 'Gleitzeit', homeoffice: 'Homeoffice',
+    krank: 'Krank', sonderurlaub: 'Sonderurlaub'
+};
+const REPORT_REASON_LABELS = {
+    hochzeit: 'Hochzeit', geburt: 'Geburt', trauerfall: 'Trauerfall',
+    umzug: 'Umzug', sonstiges: 'Sonstiges'
+};
+const REPORT_STATUS_BADGE = {
+    approved: 'badge-active',
+    pending: 'badge-role',
+    denied: 'badge-inactive'
+};
+const REPORT_STATUS_LABEL = {
+    approved: 'Genehmigt', pending: 'Ausstehend', denied: 'Abgelehnt'
+};
+
+async function loadReportsPage() {
+    // Defaults: aktuelles Jahr, wenn Felder leer sind
+    if (!reportFrom.value || !reportTo.value) {
+        const now = new Date();
+        const yearStart = new Date(now.getFullYear(), 0, 1);
+        reportFrom.value = isoToDisplay(yearStart.toISOString().split('T')[0]);
+        reportTo.value = isoToDisplay(now.toISOString().split('T')[0]);
+    }
+
+    // Gruppen für das Abteilungs-Dropdown sicherstellen
+    try {
+        if (!allGroups.length) await loadGroups();
+    } catch (err) {
+        console.error('Gruppen laden fehlgeschlagen:', err);
+    }
+    const currentVal = reportGroup.value;
+    reportGroup.innerHTML = '<option value="">Alle Abteilungen</option>';
+    allGroups.forEach(g => {
+        reportGroup.innerHTML += `<option value="${g.id}">${esc(g.name)}</option>`;
+    });
+    if (currentVal) reportGroup.value = currentVal;
+
+    // Initiale Vorschau direkt laden
+    loadReportPreview();
+}
+
+function showReportError(msg) {
+    reportError.textContent = msg;
+    reportError.classList.remove('hidden');
+}
+function hideReportError() {
+    reportError.classList.add('hidden');
+}
+
+function buildReportParams() {
+    const from = displayToIso(reportFrom.value);
+    const to = displayToIso(reportTo.value);
+    if (!from || !to) {
+        showReportError('Bitte Zeitraum (Von / Bis) eingeben.');
+        return null;
+    }
+    if (new Date(from) > new Date(to)) {
+        showReportError('Startdatum muss vor Enddatum liegen.');
+        return null;
+    }
+    hideReportError();
+    const params = new URLSearchParams();
+    params.set('from', from);
+    params.set('to', to);
+    if (reportType.value)   params.set('type', reportType.value);
+    if (reportGroup.value)  params.set('groupId', reportGroup.value);
+    if (reportStatus.value) params.set('status', reportStatus.value);
+    return params;
+}
+
+function renderReportRows(data) {
+    const { count, rows } = data;
+    reportSummary.textContent = `${count} ${count === 1 ? 'Datensatz' : 'Datensätze'}`;
+
+    if (!count) {
+        reportEmpty.classList.remove('hidden');
+        reportTbody.innerHTML = '';
+        return;
+    }
+    reportEmpty.classList.add('hidden');
+
+    reportTbody.innerHTML = rows.map(r => {
+        const badgeCls = REPORT_TYPE_BADGE_CLASS[r.type] || '';
+        const statusCls = REPORT_STATUS_BADGE[r.status] || '';
+        const note = r.note ? esc(r.note) : '<span class="text-muted">–</span>';
+        const reason = r.reasonLabel ? esc(r.reasonLabel) : '<span class="text-muted">–</span>';
+        return `
+            <tr>
+                <td>${esc(r.name)}<br><span class="text-muted text-sm">${esc(r.email)}</span></td>
+                <td>${esc(r.groupName || '–')}</td>
+                <td><span class="badge badge-type ${badgeCls}">${esc(REPORT_TYPE_LABELS[r.type] || r.type)}</span></td>
+                <td>${reason}</td>
+                <td>${esc(formatDate(r.dateFrom))}</td>
+                <td>${esc(formatDate(r.dateTo))}</td>
+                <td>${r.workdays}</td>
+                <td><span class="badge ${statusCls}">${esc(REPORT_STATUS_LABEL[r.status] || r.status)}</span></td>
+                <td class="report-note-cell">${note}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function loadReportPreview() {
+    const params = buildReportParams();
+    if (!params) return;
+
+    btnReportPreview.disabled = true;
+    btnReportPreview.textContent = 'Lädt…';
+    reportTbody.innerHTML = '<tr><td colspan="9" class="text-muted">Lädt…</td></tr>';
+    try {
+        const data = await apiFetch(`/admin/export/absences?${params.toString()}`);
+        renderReportRows(data);
+    } catch (err) {
+        showReportError('Fehler beim Laden: ' + err.message);
+        reportSummary.textContent = '–';
+        reportTbody.innerHTML = '<tr><td colspan="9" class="text-muted">–</td></tr>';
+    } finally {
+        btnReportPreview.disabled = false;
+        btnReportPreview.textContent = 'Vorschau aktualisieren';
+    }
+}
+
+async function downloadReportCsv() {
+    const params = buildReportParams();
+    if (!params) return;
+
+    btnReportExport.disabled = true;
+    const originalLabel = btnReportExport.innerHTML;
+    btnReportExport.textContent = 'Erzeuge CSV…';
+
+    try {
+        // CSV-Download muss als blob() gehen, weil JWT im Authorization-Header steckt
+        // (kein direkter <a download>-Link möglich, der trägt keinen Header).
+        const token = getToken();
+        const url = `/api/admin/export/absences?${params.toString()}&format=csv`;
+        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+
+        if (!res.ok) {
+            // Fehler ist JSON; CSV-Pfad liefert text/csv – also nur bei !ok versuchen JSON zu lesen
+            let msg = 'Download fehlgeschlagen';
+            try {
+                const body = await res.json();
+                msg = body.error || msg;
+                // 401 manuell handhaben – fetch() nutzt nicht apiFetch hier
+                if (res.status === 401 && token) {
+                    clearToken();
+                    window.dispatchEvent(new CustomEvent('auth:logout', { detail: { reason: 'session_expired' } }));
+                    return;
+                }
+            } catch {}
+            throw new Error(msg);
+        }
+
+        const blob = await res.blob();
+        // Dateiname aus Content-Disposition lesen, sonst sinnvollen Default bauen
+        const cd = res.headers.get('Content-Disposition') || '';
+        let filename = `abwesenheiten_${params.get('from')}_${params.get('to')}.csv`;
+        const match = cd.match(/filename="?([^"]+)"?/i);
+        if (match) filename = match[1];
+
+        const objUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(objUrl);
+    } catch (err) {
+        showReportError('CSV-Export fehlgeschlagen: ' + err.message);
+    } finally {
+        btnReportExport.disabled = false;
+        btnReportExport.innerHTML = originalLabel;
+    }
+}
+
+btnReportPreview.addEventListener('click', loadReportPreview);
+btnReportExport.addEventListener('click', downloadReportCsv);
+
+// Reagieren auf Filter-Änderungen mit Enter
+[reportFrom, reportTo].forEach(inp => {
+    inp.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); loadReportPreview(); }
+    });
+});
+
+registerRoute('reports', { pageId: 'page-reports', onEnter: loadReportsPage });

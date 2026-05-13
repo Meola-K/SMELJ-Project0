@@ -9,14 +9,41 @@ const router = Router();
 router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
-        if (!email || !password) return res.status(400).json({ error: 'Email und Passwort erforderlich' });
+        if (!email || !password) {
+            return res.status(400).json({
+                error: 'E-Mail und Passwort erforderlich',
+                code: 'missing_credentials'
+            });
+        }
 
-        const [rows] = await db.query('SELECT * FROM users WHERE email = ? AND active = 1', [email]);
-        if (!rows.length) return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
+        // Auch inaktive Nutzer holen, damit wir 'account_disabled' unterscheiden können.
+        // Bei nicht-existierendem User UND falschem Passwort wird gleicher Code zurückgegeben
+        // (Schutz gegen User-Enumeration).
+        const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+        if (!rows.length) {
+            return res.status(401).json({
+                error: 'E-Mail oder Passwort falsch',
+                code: 'invalid_credentials'
+            });
+        }
 
         const user = rows[0];
         const valid = await bcrypt.compare(password, user.password);
-        if (!valid) return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
+        if (!valid) {
+            return res.status(401).json({
+                error: 'E-Mail oder Passwort falsch',
+                code: 'invalid_credentials'
+            });
+        }
+
+        // Erst NACH Passwort-Check prüfen, ob aktiv – sonst leakt man die Existenz
+        // des Accounts ohne Passwort-Verifikation.
+        if (!user.active) {
+            return res.status(403).json({
+                error: 'Konto deaktiviert, bitte Admin kontaktieren',
+                code: 'account_disabled'
+            });
+        }
 
         const token = jwt.sign(
             { id: user.id, email: user.email, role: user.role, firstName: user.first_name, lastName: user.last_name, groupId: user.group_id },
@@ -30,7 +57,7 @@ router.post('/login', async (req, res) => {
         });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: 'Serverfehler' });
+        res.status(500).json({ error: 'Serverfehler', code: 'server_error' });
     }
 });
 

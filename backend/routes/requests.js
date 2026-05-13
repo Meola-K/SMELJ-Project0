@@ -6,11 +6,24 @@ const router = Router();
 
 router.post('/', auth, async (req, res) => {
     try {
-        const { type, dateFrom, dateTo, note } = req.body;
+        const { type, dateFrom, dateTo, note, reason } = req.body;
         if (!type || !dateFrom || !dateTo) return res.status(400).json({ error: 'Typ und Datum erforderlich' });
 
-        const validTypes = ['urlaub', 'gleitzeit', 'homeoffice', 'krank'];
+        const validTypes = ['urlaub', 'gleitzeit', 'homeoffice', 'krank', 'sonderurlaub'];
         if (!validTypes.includes(type)) return res.status(400).json({ error: 'Ungültiger Antragstyp' });
+
+        // Sonderurlaub: Anlass ist Pflicht, bei 'sonstiges' zusätzlich Freitext (note)
+        const validReasons = ['hochzeit', 'geburt', 'trauerfall', 'umzug', 'sonstiges'];
+        let reasonValue = null;
+        if (type === 'sonderurlaub') {
+            if (!reason || !validReasons.includes(reason)) {
+                return res.status(400).json({ error: 'Bitte gültigen Anlass für Sonderurlaub wählen' });
+            }
+            if (reason === 'sonstiges' && (!note || !note.trim())) {
+                return res.status(400).json({ error: 'Bei Anlass "Sonstiges" ist eine Begründung im Notizfeld erforderlich' });
+            }
+            reasonValue = reason;
+        }
 
         if (new Date(dateFrom) > new Date(dateTo)) return res.status(400).json({ error: 'Startdatum muss vor Enddatum liegen' });
 
@@ -22,8 +35,8 @@ router.post('/', auth, async (req, res) => {
         if (overlap.length) return res.status(400).json({ error: 'Es gibt bereits einen Antrag in diesem Zeitraum' });
 
         const [result] = await db.query(
-            'INSERT INTO requests (user_id, type, date_from, date_to, note) VALUES (?, ?, ?, ?, ?)',
-            [req.user.id, type, dateFrom, dateTo, note || null]
+            'INSERT INTO requests (user_id, type, date_from, date_to, note, reason) VALUES (?, ?, ?, ?, ?, ?)',
+            [req.user.id, type, dateFrom, dateTo, note || null, reasonValue]
         );
 
         const io = req.app.get('io');
@@ -34,7 +47,7 @@ router.post('/', auth, async (req, res) => {
                     id: result.insertId,
                     userId: req.user.id,
                     userName: `${req.user.firstName} ${req.user.lastName}`,
-                    type, dateFrom, dateTo
+                    type, dateFrom, dateTo, reason: reasonValue
                 });
             }
         }

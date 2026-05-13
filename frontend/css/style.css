@@ -1273,3 +1273,149 @@ body.modal-open { overflow: hidden; }
 .th-sortable.th-sort-asc .sort-arrow {
     transform: rotate(180deg);
 }
+
+/* ── Antragstyp-Farben (Sonderurlaub-Ticket) ─────────────────
+   Eigene Farb-Badges für jeden Antragstyp – Sonderurlaub = orange
+   Wird auch als Vorlage für eine spätere Kalenderansicht verwendet. */
+.badge-type {
+    font-weight: 600;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+.type-urlaub        { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+.type-gleitzeit     { background: #ede9fe; color: #5b21b6; border-color: #c4b5fd; }
+.type-homeoffice    { background: #dcfce7; color: #166534; border-color: #86efac; }
+.type-krank         { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+.type-sonderurlaub  { background: #ffedd5; color: #9a3412; border-color: #fdba74; }
+
+/* Legende */
+.type-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    margin-top: 0.75rem;
+    border-top: 1px solid var(--border);
+}
+.type-legend-title {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-right: 0.25rem;
+}
+
+/* ── Arbeitsregeln & Zeitlimits Modal (SCRUM-150/152) ──────── */
+.modal-content-wide {
+    max-width: 760px;
+}
+
+.rules-user-info {
+    margin-bottom: 1rem;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+}
+
+.rules-section-title {
+    margin-top: 1.5rem;
+    margin-bottom: 0.25rem;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.rules-section-title:first-of-type {
+    margin-top: 0;
+}
+
+.rules-table-wrap {
+    overflow-x: auto;
+    margin-top: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.rules-table th,
+.rules-table td {
+    padding: 0.5rem 0.75rem;
+    vertical-align: middle;
+}
+
+.rules-table input[type="time"],
+.rules-table input[type="number"] {
+    width: 100%;
+    min-width: 90px;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 0.9rem;
+}
+
+.rules-table input:disabled {
+    background: #f1f5f9;
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
+
+.rules-table .rule-day-name {
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.rules-table .rule-allowed-cell {
+    text-align: center;
+}
+
+@media (max-width: 640px) {
+    .modal-content-wide {
+        max-width: 95vw;
+    }
+    .rules-table th,
+    .rules-table td {
+        padding: 0.4rem 0.4rem;
+        font-size: 0.85rem;
+    }
+}
+
+/* ── Reports / Abwesenheitsbericht (SCRUM-210) ───────────────── */
+.report-filter-title {
+    margin-bottom: 0.75rem;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.report-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 0.75rem 1rem;
+    margin-bottom: 1rem;
+}
+
+.report-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    border-top: 1px solid var(--border);
+    padding-top: 1rem;
+}
+
+.report-summary-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+.report-summary-row h3 { margin: 0; }
+
+.report-table-wrap {
+    overflow-x: auto;
+}
+
+#report-table {
+    min-width: 900px;
+}
+
+.report-note-cell {
+    max-width: 280px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}

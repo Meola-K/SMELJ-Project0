@@ -59,10 +59,12 @@ CREATE TABLE timestamps_log (
 CREATE TABLE requests (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT DEFAULT NULL,
-    type ENUM('urlaub','gleitzeit','homeoffice','krank') NOT NULL,
+    type ENUM('urlaub','gleitzeit','homeoffice','krank','sonderurlaub') NOT NULL,
     date_from DATE NOT NULL,
     date_to DATE NOT NULL,
     note TEXT DEFAULT NULL,
+    -- Anlass nur bei type='sonderurlaub' relevant; bei 'sonstiges' MUSS note gefüllt sein (Freitext)
+    reason ENUM('hochzeit','geburt','trauerfall','umzug','sonstiges') DEFAULT NULL,
     status ENUM('pending','approved','denied') DEFAULT 'pending',
     reviewed_by INT DEFAULT NULL,
     reviewed_at DATETIME DEFAULT NULL,
@@ -71,6 +73,11 @@ CREATE TABLE requests (
     FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_user_status (user_id, status)
 );
+
+-- Migration für bestehende Datenbanken (separat ausführen, falls die Tabelle schon existiert):
+-- ALTER TABLE requests
+--   MODIFY COLUMN type ENUM('urlaub','gleitzeit','homeoffice','krank','sonderurlaub') NOT NULL,
+--   ADD COLUMN reason ENUM('hochzeit','geburt','trauerfall','umzug','sonstiges') DEFAULT NULL AFTER note;
 
 CREATE TABLE devices (
     id VARCHAR(50) PRIMARY KEY,
