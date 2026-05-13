@@ -2310,3 +2310,180 @@ btnReportExport.addEventListener('click', downloadReportCsv);
 });
 
 registerRoute('reports', { pageId: 'page-reports', onEnter: loadReportsPage });
+
+// ── Monatskalender (SCRUM-Monatskalender) ──────────────────
+// Zeigt eine Monatsansicht mit farblich markierten Abwesenheiten
+// des angemeldeten Mitarbeiters. Daten kommen vom existierenden
+// Endpoint /api/requests/my und werden client-seitig auf den
+// dargestellten Monat gefiltert.
+
+const calendarGrid = document.getElementById('calendar-grid');
+const calendarTitle = document.getElementById('cal-title');
+const btnCalPrev = document.getElementById('btn-cal-prev');
+const btnCalNext = document.getElementById('btn-cal-next');
+const btnCalToday = document.getElementById('btn-cal-today');
+
+const MONTH_NAMES_DE = [
+    'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+    'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
+];
+
+// State: aktuell angezeigter Monat
+const _now = new Date();
+let calendarYear  = _now.getFullYear();
+let calendarMonth = _now.getMonth(); // 0-11
+let calendarRequests = []; // Cache der Anträge
+
+// ── Hilfsfunktionen ────────────────────────────────────────
+
+// Lokales YYYY-MM-DD ohne Zeitzonen-Probleme
+function toIsoLocal(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+// Wochentag-Index mit Montag = 0, Sonntag = 6
+function mondayBasedDay(date) {
+    return (date.getDay() + 6) % 7;
+}
+
+// Map<ISODate, {type, status, reason}> über alle Tage des Monats berechnen
+function buildAbsenceMap(requests, year, month) {
+    const map = new Map();
+    // Anzeige-Range: erster Tag im Grid bis letzter Tag im Grid (inkl. Vor-/Nachlauftage)
+    const first = new Date(year, month, 1);
+    const last  = new Date(year, month + 1, 0); // letzter Tag des Monats
+    const gridStart = new Date(year, month, 1 - mondayBasedDay(first));
+    const gridEndDays = 42; // 6 Wochen × 7 Tage
+    const gridEnd = new Date(gridStart);
+    gridEnd.setDate(gridEnd.getDate() + gridEndDays - 1);
+
+    requests.forEach(r => {
+        if (r.status === 'denied') return; // abgelehnte ignorieren
+        const from = new Date(r.date_from);
+        const to   = new Date(r.date_to);
+        // Range einschränken auf das, was im Grid sichtbar wäre
+        const start = from < gridStart ? new Date(gridStart) : new Date(from);
+        const end   = to   > gridEnd   ? new Date(gridEnd)   : new Date(to);
+        const cur = new Date(start);
+        cur.setHours(0, 0, 0, 0);
+        const endCmp = new Date(end);
+        endCmp.setHours(0, 0, 0, 0);
+        while (cur <= endCmp) {
+            map.set(toIsoLocal(cur), {
+                type: r.type,
+                status: r.status,
+                reason: r.reason || null,
+            });
+            cur.setDate(cur.getDate() + 1);
+        }
+    });
+    return map;
+}
+
+// ── Rendering ──────────────────────────────────────────────
+
+function renderCalendar() {
+    if (!calendarGrid) return;
+
+    calendarTitle.textContent = `${MONTH_NAMES_DE[calendarMonth]} ${calendarYear}`;
+
+    const first = new Date(calendarYear, calendarMonth, 1);
+    const leadingBlanks = mondayBasedDay(first); // wie viele Tage vor dem 1.
+    const gridStart = new Date(calendarYear, calendarMonth, 1 - leadingBlanks);
+
+    const absenceMap = buildAbsenceMap(calendarRequests, calendarYear, calendarMonth);
+    const todayIso = toIsoLocal(new Date());
+
+    const cells = [];
+    for (let i = 0; i < 42; i++) {
+        const day = new Date(gridStart);
+        day.setDate(day.getDate() + i);
+        const inMonth = day.getMonth() === calendarMonth;
+        const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+        const iso = toIsoLocal(day);
+        const isToday = iso === todayIso;
+        const absence = absenceMap.get(iso);
+
+        const classes = ['calendar-day'];
+        if (!inMonth) classes.push('calendar-day--out-of-month');
+        if (isWeekend) classes.push('calendar-day--weekend');
+        if (isToday)  classes.push('calendar-day--today');
+        if (absence) {
+            classes.push('calendar-day--absence');
+            classes.push(`type-${absence.type}`);
+            if (absence.status === 'pending') classes.push('calendar-day--pending');
+        }
+
+        // Label – Typ/Anlass kurz anzeigen, nur im aktuellen Monat
+        let label = '';
+        if (absence && inMonth) {
+            label = typeLabels[absence.type] || absence.type;
+            if (absence.type === 'sonderurlaub' && absence.reason) {
+                label = reasonLabels[absence.reason] || label;
+            }
+            if (absence.status === 'pending') label += ' (offen)';
+        }
+
+        // ARIA: Wochentag + Datum lesen
+        const ariaLabel = day.toLocaleDateString('de-DE', {
+            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+        }) + (absence && inMonth ? ` – ${label}` : '') + (isToday ? ' – heute' : '');
+
+        cells.push(`
+            <div class="${classes.join(' ')}" role="gridcell" aria-label="${esc(ariaLabel)}">
+                <span class="calendar-day-number">${day.getDate()}</span>
+                ${label ? `<span class="calendar-day-label">${esc(label)}</span>` : ''}
+            </div>
+        `);
+    }
+
+    calendarGrid.innerHTML = cells.join('');
+}
+
+// ── Daten laden ────────────────────────────────────────────
+
+async function loadCalendarRequests() {
+    try {
+        calendarRequests = await apiFetch('/requests/my');
+    } catch (err) {
+        console.error('Fehler beim Laden der Kalenderdaten:', err);
+        calendarRequests = [];
+    }
+}
+
+async function loadCalendar() {
+    await loadCalendarRequests();
+    renderCalendar();
+}
+
+// ── Navigation ─────────────────────────────────────────────
+
+btnCalPrev?.addEventListener('click', () => {
+    calendarMonth--;
+    if (calendarMonth < 0) {
+        calendarMonth = 11;
+        calendarYear--;
+    }
+    renderCalendar();
+});
+
+btnCalNext?.addEventListener('click', () => {
+    calendarMonth++;
+    if (calendarMonth > 11) {
+        calendarMonth = 0;
+        calendarYear++;
+    }
+    renderCalendar();
+});
+
+btnCalToday?.addEventListener('click', () => {
+    const t = new Date();
+    calendarYear = t.getFullYear();
+    calendarMonth = t.getMonth();
+    renderCalendar();
+});
+
+registerRoute('calendar', { pageId: 'page-calendar', onEnter: loadCalendar });
