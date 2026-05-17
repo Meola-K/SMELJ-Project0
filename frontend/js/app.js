@@ -298,6 +298,8 @@ function setupSocket() {
         const statusLabel = data.status === 'approved' ? 'genehmigt' : 'abgelehnt';
         const type = data.status === 'approved' ? 'success' : 'error';
         showToast(`Korrektur ${statusLabel}`, `Bearbeitet von ${data.reviewerName}`, type);
+        if (typeof loadMyCorrections === 'function') loadMyCorrections();
+        if (data.status === 'approved' && typeof loadDashboard === 'function') loadDashboard();
     });
 
     socket.on('correction:new', () => {
@@ -462,6 +464,7 @@ async function loadDashboard() {
         loadHistory();
         loadVacation();
         loadMyRequests();
+        loadMyCorrections();
 
         if (isStampedIn) startTodayTicker();
         else stopTodayTicker();
@@ -1424,6 +1427,241 @@ window._withdrawRequest = async function(id) {
     }
 };
 
+// ── SCRUM-157/159/160: Zeitkorrekturen beantragen ──────────────
+const correctionModal       = document.getElementById('modal-new-correction');
+const btnNewCorrection      = document.getElementById('btn-new-correction');
+const btnCloseCorrModal     = document.getElementById('btn-close-correction-modal');
+const btnCancelCorrModal    = document.getElementById('btn-cancel-correction-modal');
+const btnSubmitCorrection   = document.getElementById('btn-submit-correction');
+const newCorrectionError    = document.getElementById('new-correction-error');
+const newCorrectionSuccess  = document.getElementById('new-correction-success');
+const myCorrectionsTbody    = document.getElementById('my-corrections-tbody');
+const myCorrectionsTable    = document.getElementById('my-corrections-table');
+const myCorrectionsEmpty    = document.getElementById('my-corrections-empty');
+
+const correctionTypeLabelsLocal = { add: 'Nachtragen', edit: 'Korrigieren', delete: 'Löschen' };
+const correctionStatusLabels    = { pending: 'Ausstehend', approved: 'Genehmigt', denied: 'Abgelehnt' };
+
+let myStampsCache = [];
+
+async function openCorrectionModal() {
+    newCorrectionError.classList.add('hidden');
+    newCorrectionSuccess.classList.add('hidden');
+    document.getElementById('corr-type').value = 'add';
+    document.getElementById('corr-stamptype').value = 'in';
+    document.getElementById('corr-date').value = '';
+    document.getElementById('corr-time').value = '';
+    document.getElementById('corr-reason').value = '';
+
+    // Stempel der letzten 30 Tage laden
+    try {
+        const today = new Date();
+        const past = new Date(today);
+        past.setDate(past.getDate() - 30);
+        const from = past.toISOString().split('T')[0];
+        const to   = today.toISOString().split('T')[0];
+        myStampsCache = await apiFetch(`/stamp/history?from=${from}&to=${to}`);
+    } catch {
+        myStampsCache = [];
+    }
+    populateCorrectionStamps();
+    updateCorrectionFields();
+    openModalA11y(correctionModal);
+}
+
+function closeCorrectionModal() {
+    closeModalA11y(correctionModal);
+}
+
+function populateCorrectionStamps() {
+    const sel = document.getElementById('corr-stamp');
+    if (!myStampsCache.length) {
+        sel.innerHTML = '<option value="">Keine Stempel in den letzten 30 Tagen</option>';
+        return;
+    }
+    const opts = myStampsCache.slice().reverse().map(s => {
+        const typeLabel = s.type === 'in' ? 'Einstempeln' : 'Ausstempeln';
+        const dateStr = formatDate(s.stamp_time);
+        const timeStr = formatTime(s.stamp_time);
+        return `<option value="${s.id}">${dateStr} ${timeStr} – ${typeLabel}</option>`;
+    }).join('');
+    sel.innerHTML = '<option value="">– Stempel wählen –</option>' + opts;
+}
+
+function updateCorrectionFields() {
+    const type = document.getElementById('corr-type').value;
+    const stampGroup     = document.getElementById('corr-stamp-group');
+    const stampTypeGroup = document.getElementById('corr-stamptype-group');
+    const dateGroup      = document.getElementById('corr-date-group');
+    const timeGroup      = document.getElementById('corr-time-group');
+
+    if (type === 'add') {
+        stampGroup.classList.add('hidden');
+        stampTypeGroup.classList.remove('hidden');
+        dateGroup.classList.remove('hidden');
+        timeGroup.classList.remove('hidden');
+    } else if (type === 'edit') {
+        stampGroup.classList.remove('hidden');
+        stampTypeGroup.classList.add('hidden');
+        dateGroup.classList.remove('hidden');
+        timeGroup.classList.remove('hidden');
+    } else {
+        stampGroup.classList.remove('hidden');
+        stampTypeGroup.classList.add('hidden');
+        dateGroup.classList.add('hidden');
+        timeGroup.classList.add('hidden');
+    }
+}
+
+btnNewCorrection?.addEventListener('click', openCorrectionModal);
+btnCloseCorrModal?.addEventListener('click', closeCorrectionModal);
+btnCancelCorrModal?.addEventListener('click', closeCorrectionModal);
+document.querySelector('.modal-backdrop-correction')?.addEventListener('click', closeCorrectionModal);
+document.getElementById('corr-type')?.addEventListener('change', updateCorrectionFields);
+document.getElementById('corr-stamp')?.addEventListener('change', () => {
+    const stampId = document.getElementById('corr-stamp').value;
+    const stamp = myStampsCache.find(s => String(s.id) === String(stampId));
+    if (stamp && document.getElementById('corr-type').value === 'edit') {
+        const d = new Date(stamp.stamp_time);
+        document.getElementById('corr-date').value = isoToDisplay(d.toISOString().split('T')[0]);
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        document.getElementById('corr-time').value = `${hh}:${mm}`;
+    }
+});
+
+btnSubmitCorrection?.addEventListener('click', async () => {
+    newCorrectionError.classList.add('hidden');
+    newCorrectionSuccess.classList.add('hidden');
+
+    const type     = document.getElementById('corr-type').value;
+    const stampId  = document.getElementById('corr-stamp').value;
+    const stampTp  = document.getElementById('corr-stamptype').value;
+    const dateStr  = document.getElementById('corr-date').value;
+    const timeStr  = document.getElementById('corr-time').value;
+    const reason   = document.getElementById('corr-reason').value.trim();
+
+    if (!reason || reason.length < 5) {
+        newCorrectionError.textContent = 'Bitte eine Begründung mit mindestens 5 Zeichen angeben.';
+        newCorrectionError.classList.remove('hidden');
+        return;
+    }
+
+    const body = { type, reason };
+
+    if (type === 'add') {
+        const iso = displayToIso(dateStr);
+        if (!iso || !timeStr) {
+            newCorrectionError.textContent = 'Bitte Datum (dd.mm.yy) und Uhrzeit angeben.';
+            newCorrectionError.classList.remove('hidden');
+            return;
+        }
+        body.stampType = stampTp;
+        body.correctedTime = `${iso}T${timeStr}`;
+    } else if (type === 'edit') {
+        if (!stampId) {
+            newCorrectionError.textContent = 'Bitte einen Stempel auswählen.';
+            newCorrectionError.classList.remove('hidden');
+            return;
+        }
+        const iso = displayToIso(dateStr);
+        if (!iso || !timeStr) {
+            newCorrectionError.textContent = 'Bitte Datum (dd.mm.yy) und neue Uhrzeit angeben.';
+            newCorrectionError.classList.remove('hidden');
+            return;
+        }
+        body.stampId = parseInt(stampId);
+        body.correctedTime = `${iso}T${timeStr}`;
+    } else {
+        if (!stampId) {
+            newCorrectionError.textContent = 'Bitte einen Stempel auswählen.';
+            newCorrectionError.classList.remove('hidden');
+            return;
+        }
+        body.stampId = parseInt(stampId);
+    }
+
+    btnSubmitCorrection.disabled = true;
+    btnSubmitCorrection.textContent = 'Wird gesendet...';
+
+    try {
+        await apiFetch('/corrections', { method: 'POST', body: JSON.stringify(body) });
+        newCorrectionSuccess.textContent = 'Korrekturantrag eingereicht. Dein Vorgesetzter wurde benachrichtigt.';
+        newCorrectionSuccess.classList.remove('hidden');
+        showToast('Korrektur eingereicht', 'Dein Vorgesetzter wurde benachrichtigt.', 'success');
+        await loadMyCorrections();
+        setTimeout(() => {
+            closeCorrectionModal();
+            newCorrectionSuccess.classList.add('hidden');
+        }, 1800);
+    } catch (err) {
+        newCorrectionError.textContent = err.message;
+        newCorrectionError.classList.remove('hidden');
+        showToast('Fehler', err.message, 'error');
+    } finally {
+        btnSubmitCorrection.disabled = false;
+        btnSubmitCorrection.textContent = 'Antrag stellen';
+    }
+});
+
+async function loadMyCorrections() {
+    if (!myCorrectionsTbody) return;
+    try {
+        const corrections = await apiFetch('/corrections/my');
+        renderMyCorrections(corrections);
+    } catch (err) {
+        console.error('Fehler beim Laden der Korrekturen:', err);
+    }
+}
+
+function renderMyCorrections(corrections) {
+    if (!corrections || !corrections.length) {
+        myCorrectionsTable.classList.add('hidden');
+        myCorrectionsEmpty.classList.remove('hidden');
+        return;
+    }
+    myCorrectionsTable.classList.remove('hidden');
+    myCorrectionsEmpty.classList.add('hidden');
+
+    myCorrectionsTbody.innerHTML = corrections.map(c => {
+        const typeLabel = correctionTypeLabelsLocal[c.type] || c.type;
+        const statusLabel = correctionStatusLabels[c.status] || c.status;
+        let dateTimeCell = '–';
+        if (c.type === 'add') {
+            dateTimeCell = `${formatDate(c.corrected_time)} ${formatTime(c.corrected_time)} (${c.stamp_type === 'in' ? 'Ein' : 'Aus'})`;
+        } else if (c.type === 'edit') {
+            const oldT = c.original_time ? `${formatDate(c.original_time)} ${formatTime(c.original_time)}` : '–';
+            const newT = c.corrected_time ? `${formatDate(c.corrected_time)} ${formatTime(c.corrected_time)}` : '–';
+            dateTimeCell = `${oldT} → ${newT}`;
+        } else if (c.type === 'delete' && c.original_time) {
+            dateTimeCell = `${formatDate(c.original_time)} ${formatTime(c.original_time)}`;
+        }
+        const reasonShort = esc(c.reason.length > 50 ? c.reason.slice(0, 50) + '…' : c.reason);
+        const withdrawBtn = c.status === 'pending'
+            ? `<button class="btn btn-sm btn-withdraw" onclick="window._withdrawCorrection(${c.id})">Zurückziehen</button>`
+            : '';
+        return `
+            <tr>
+                <td><span class="badge badge-type type-${c.type}">${typeLabel}</span></td>
+                <td>${dateTimeCell}</td>
+                <td title="${esc(c.reason)}">${reasonShort}</td>
+                <td><span class="badge badge-${c.status}">${statusLabel}</span></td>
+                <td>${withdrawBtn}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+window._withdrawCorrection = async function(id) {
+    if (!confirm('Möchten Sie diesen Korrekturantrag wirklich zurückziehen?')) return;
+    try {
+        await apiFetch(`/corrections/${id}`, { method: 'DELETE' });
+        await loadMyCorrections();
+    } catch (err) {
+        showToast('Fehler', err.message, 'error');
+    }
+};
+
 // ── Antragsverwaltung (Vorgesetzter / Admin) ─────────────────
 
 let allRequestsData = [];   // cache für client-seitiges Filtern
@@ -1731,11 +1969,19 @@ function renderDevicesTable(devices) {
         const statusBadge = online
             ? '<span class="badge badge-active">● Online</span>'
             : '<span class="badge badge-inactive">● Offline</span>';
+        const modeOptions = [
+            { v: 'stamp',     l: 'Stempel-Modus' },
+            { v: 'frontdesk', l: 'Frontdesk-Modus' },
+        ].map(o => `<option value="${o.v}" ${d.mode === o.v ? 'selected' : ''}>${o.l}</option>`).join('');
+        const modeCell = d.mode === 'assign'
+            ? '<span class="badge badge-pending">Zuweisung läuft…</span>'
+            : `<select class="device-mode-select" data-device-id="${esc(d.id)}" onchange="window._changeDeviceMode(this)">${modeOptions}</select>`;
         return `
             <tr>
                 <td><code>${esc(d.id)}</code></td>
                 <td>${esc(d.name)}</td>
                 <td>${esc(d.location || '–')}</td>
+                <td>${modeCell}</td>
                 <td>${statusBadge}</td>
                 <td>${formatLastSeen(d.last_seen)}</td>
                 <td class="actions-cell">
@@ -1850,6 +2096,28 @@ window._removeNfc = async function(userId, name) {
         renderNfcTable();
     } catch (err) {
         alert('Fehler: ' + err.message);
+    }
+};
+
+// SCRUM-297: Modus pro Stempeluhr umschalten (stamp / frontdesk)
+window._changeDeviceMode = async function(selectEl) {
+    const deviceId = selectEl.dataset.deviceId;
+    const newMode = selectEl.value;
+    const prevMode = selectEl.dataset.prevMode || (allDevicesData.find(d => d.id === deviceId)?.mode) || 'stamp';
+    if (newMode === prevMode) return;
+    selectEl.disabled = true;
+    try {
+        await apiFetch(`/admin/devices/${deviceId}/mode`, {
+            method: 'PUT',
+            body: JSON.stringify({ mode: newMode }),
+        });
+        showToast('Modus geändert', newMode === 'frontdesk' ? 'Frontdesk-Modus aktiv' : 'Stempel-Modus aktiv', 'success');
+        await loadDevices();
+    } catch (err) {
+        showToast('Fehler', err.message, 'error');
+        selectEl.value = prevMode;
+    } finally {
+        selectEl.disabled = false;
     }
 };
 

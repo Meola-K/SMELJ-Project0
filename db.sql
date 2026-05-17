@@ -83,12 +83,15 @@ CREATE TABLE devices (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     location VARCHAR(100) DEFAULT NULL,
-    mode ENUM('stamp','assign') DEFAULT 'stamp',
+    mode ENUM('stamp','assign','frontdesk') DEFAULT 'stamp',
     assign_user_id INT DEFAULT NULL,
     last_seen DATETIME DEFAULT NULL,
     active TINYINT(1) DEFAULT 1,
     FOREIGN KEY (assign_user_id) REFERENCES users(id) ON DELETE SET NULL
 );
+
+-- Migration für bestehende Datenbanken (SCRUM-294, separat ausführen):
+-- ALTER TABLE devices MODIFY COLUMN mode ENUM('stamp','assign','frontdesk') DEFAULT 'stamp';
 
 CREATE TABLE vacation_entitlements (
     id INT AUTO_INCREMENT PRIMARY KEY,

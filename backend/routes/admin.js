@@ -278,6 +278,31 @@ router.put('/devices/:id/assign', auth, role('admin'), async (req, res) => {
     }
 });
 
+// SCRUM-297: Modus pro Gerät umstellen (stamp ↔ frontdesk)
+router.put('/devices/:id/mode', auth, role('admin'), async (req, res) => {
+    try {
+        const { mode } = req.body;
+        if (!['stamp', 'frontdesk'].includes(mode)) {
+            return res.status(400).json({ error: 'Ungültiger Modus' });
+        }
+        const [exists] = await db.query('SELECT id FROM devices WHERE id = ?', [req.params.id]);
+        if (!exists.length) return res.status(404).json({ error: 'Gerät nicht gefunden' });
+
+        await db.query(
+            'UPDATE devices SET mode = ?, assign_user_id = NULL WHERE id = ?',
+            [mode, req.params.id]
+        );
+
+        const io = req.app.get('io');
+        if (io) io.emit('device:modeChanged', { deviceId: req.params.id, mode });
+
+        res.json({ message: mode === 'frontdesk' ? 'Frontdesk-Modus aktiviert' : 'Stempel-Modus aktiviert' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
 router.delete('/devices/:id', auth, role('admin'), async (req, res) => {
     try {
         await db.query('DELETE FROM devices WHERE id = ?', [req.params.id]);
@@ -661,43 +686,8 @@ router.put('/corrections/:id/review', auth, role('vorgesetzter', 'admin'), async
     }
 });
 
-router.post('/corrections', auth, async (req, res) => {
-    try {
-        const { stampId, type, correctedTime, stampType, reason } = req.body;
-        if (!type || !reason) return res.status(400).json({ error: 'Typ und Begründung erforderlich' });
-        if (!['add', 'edit', 'delete'].includes(type)) return res.status(400).json({ error: 'Ungültiger Korrekturtyp' });
-
-        let originalTime = null;
-        if (stampId) {
-            const [stamp] = await db.query('SELECT * FROM timestamps_log WHERE id = ? AND user_id = ?', [stampId, req.user.id]);
-            if (!stamp.length) return res.status(404).json({ error: 'Stempel nicht gefunden' });
-            originalTime = stamp[0].stamp_time;
-        }
-
-        const [result] = await db.query(
-            'INSERT INTO corrections (user_id, stamp_id, type, original_time, corrected_time, stamp_type, reason) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [req.user.id, stampId || null, type, originalTime, correctedTime || null, stampType || null, reason]
-        );
-
-        const io = req.app.get('io');
-        if (io) {
-            const [user] = await db.query('SELECT supervisor_id FROM users WHERE id = ?', [req.user.id]);
-            if (user[0]?.supervisor_id) {
-                io.to(`user-${user[0].supervisor_id}`).emit('correction:new', {
-                    id: result.insertId,
-                    userId: req.user.id,
-                    userName: `${req.user.firstName} ${req.user.lastName}`,
-                    type
-                });
-            }
-        }
-
-        res.json({ id: result.insertId, message: 'Korrekturantrag eingereicht' });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Serverfehler' });
-    }
-});
+// SCRUM-159/160: Userseitige Endpoints sind in routes/corrections.js gewandert.
+// Die alte (weniger validierte) POST /admin/corrections-Route wurde entfernt.
 
 // ── SCRUM-211/212: Abwesenheitsbericht – JSON-Vorschau & CSV-Export ──────────
 // GET /api/admin/export/absences?from=YYYY-MM-DD&to=YYYY-MM-DD

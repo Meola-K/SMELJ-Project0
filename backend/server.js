@@ -1,6 +1,7 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import { WebSocketServer } from 'ws';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -11,6 +12,8 @@ import authRoutes from './routes/auth.js';
 import stampRoutes from './routes/stamp.js';
 import requestRoutes from './routes/requests.js';
 import adminRoutes from './routes/admin.js';
+import correctionRoutes from './routes/corrections.js';
+import deviceRoutes from './routes/devices.js';
 
 dotenv.config();
 
@@ -28,7 +31,34 @@ const io = new Server(server, {
     cors: { origin: '*', methods: ['GET', 'POST'] }
 });
 
+// SCRUM-298: WebSocket-Server für ESP32-Frontdesk-Live-Updates
+// Pfad: /ws/presence – ohne Auth, ESP32 verbindet sich roh (arduinoWebSockets).
+const wss = new WebSocketServer({ noServer: true });
+const presenceClients = new Set();
+
+wss.on('connection', (ws) => {
+    presenceClients.add(ws);
+    ws.on('close', () => presenceClients.delete(ws));
+    ws.on('error', () => presenceClients.delete(ws));
+    ws.send(JSON.stringify({ event: 'connected' }));
+});
+
+server.on('upgrade', (req, socket, head) => {
+    const url = req.url || '';
+    if (url.startsWith('/ws/presence')) {
+        wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+    }
+});
+
+function broadcastPresenceChange(payload) {
+    const msg = JSON.stringify({ event: 'presence:changed', ...payload });
+    for (const client of presenceClients) {
+        if (client.readyState === 1) client.send(msg);
+    }
+}
+
 app.set('io', io);
+app.set('broadcastPresenceChange', broadcastPresenceChange);
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
@@ -36,12 +66,15 @@ app.use(express.static(path.join(__dirname, '..', 'frontend')));
 app.use('/api/auth', authRoutes);
 app.use('/api/stamp', stampRoutes);
 app.use('/api/requests', requestRoutes);
+app.use('/api/corrections', correctionRoutes);
+app.use('/api/devices', deviceRoutes);
 app.use('/api/admin', adminRoutes);
 
 app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api')) {
-        res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html'));
+    if (req.path.startsWith('/api')) {
+        return res.status(404).json({ error: 'Endpoint nicht gefunden' });
     }
+    res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html'));
 });
 
 io.use((socket, next) => {

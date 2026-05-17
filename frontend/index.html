@@ -198,6 +198,94 @@
                         </table>
                     </div>
 
+                    <!-- SCRUM-157: Zeitkorrekturen beantragen -->
+                    <div class="card requests-card">
+                        <div class="requests-header">
+                            <h3>Meine Zeitkorrekturen</h3>
+                            <button class="btn btn-sm btn-primary" id="btn-new-correction">+ Korrektur beantragen</button>
+                        </div>
+                        <div id="my-corrections-empty" class="text-muted hidden">Keine Korrekturanträge vorhanden.</div>
+                        <table class="table" id="my-corrections-table">
+                            <thead>
+                                <tr>
+                                    <th>Typ</th>
+                                    <th>Datum / Zeit</th>
+                                    <th>Begründung</th>
+                                    <th>Status</th>
+                                    <th>Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody id="my-corrections-tbody"></tbody>
+                        </table>
+                    </div>
+
+                    <!-- Modal: Korrektur beantragen (SCRUM-157) -->
+                    <div id="modal-new-correction" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-new-correction-title">
+                        <div class="modal-backdrop modal-backdrop-correction"></div>
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h2 id="modal-new-correction-title">Zeitkorrektur beantragen</h2>
+                                <button class="modal-close" id="btn-close-correction-modal" aria-label="Dialog schließen">&times;</button>
+                            </div>
+                            <div id="new-correction-error" class="alert alert-error hidden" role="alert"></div>
+                            <div id="new-correction-success" class="alert alert-success hidden" role="status"></div>
+                            <p class="form-hint">Vergessenes Stempeln nachtragen oder einen falschen Stempel korrigieren / löschen. Dein Vorgesetzter prüft den Antrag.</p>
+
+                            <div class="form-group">
+                                <label for="corr-type">Korrekturart *</label>
+                                <select id="corr-type">
+                                    <option value="add">➕ Nachtragen</option>
+                                    <option value="edit">✏ Korrigieren</option>
+                                    <option value="delete">🗑 Löschen</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group" id="corr-stamp-group">
+                                <label for="corr-stamp">Stempel *</label>
+                                <select id="corr-stamp">
+                                    <option value="">– Stempel laden –</option>
+                                </select>
+                                <p class="form-hint">Letzte 30 Tage</p>
+                            </div>
+
+                            <div class="form-group" id="corr-stamptype-group">
+                                <label for="corr-stamptype">Stempeltyp *</label>
+                                <select id="corr-stamptype">
+                                    <option value="in">Einstempeln</option>
+                                    <option value="out">Ausstempeln</option>
+                                </select>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group" id="corr-date-group">
+                                    <label for="corr-date">Datum *</label>
+                                    <div class="date-input-wrap">
+                                        <input type="text" id="corr-date" placeholder="dd.mm.yy" maxlength="8" inputmode="numeric" pattern="\d{2}\.\d{2}\.\d{2}">
+                                        <input type="date" class="date-picker-hidden" tabindex="-1" aria-hidden="true">
+                                        <button type="button" class="btn-date-picker" aria-label="Kalender öffnen">
+                                            <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="form-group" id="corr-time-group">
+                                    <label for="corr-time">Uhrzeit *</label>
+                                    <input type="time" id="corr-time">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="corr-reason">Begründung *</label>
+                                <textarea id="corr-reason" rows="3" maxlength="500" placeholder="Warum ist die Korrektur erforderlich? (z.B. vergessenes Stempeln nach Mittagspause)"></textarea>
+                                <p class="form-hint">Mindestens 5 Zeichen, max. 500.</p>
+                            </div>
+
+                            <div class="modal-footer">
+                                <button type="button" class="btn" id="btn-cancel-correction-modal">Abbrechen</button>
+                                <button type="button" class="btn btn-primary" id="btn-submit-correction">Antrag stellen</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Modal: Neuer Antrag -->
                     <div id="modal-new-request" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-new-request-title">
                         <div class="modal-backdrop modal-backdrop-request"></div>
@@ -567,6 +655,7 @@
                                     <th>ID</th>
                                     <th>Name</th>
                                     <th>Standort</th>
+                                    <th>Modus</th>
                                     <th>Status</th>
                                     <th>Zuletzt gesehen</th>
                                     <th>Aktionen</th>

@@ -141,6 +141,16 @@ router.post('/', auth, async (req, res) => {
             }
         }
 
+        // SCRUM-298: Frontdesk-ESP32s über Anwesenheitsänderung informieren
+        const broadcastPresence = req.app.get('broadcastPresenceChange');
+        if (broadcastPresence) {
+            broadcastPresence({
+                userId,
+                name: `${req.user.firstName} ${req.user.lastName}`,
+                status: type === 'in' ? 'present' : 'absent'
+            });
+        }
+
         res.json(result);
     } catch (err) {
         console.error(err);
@@ -168,6 +178,11 @@ router.post('/nfc', async (req, res) => {
         if (!devices.length) return res.status(403).json({ error: 'Gerät deaktiviert' });
 
         const device = devices[0];
+
+        // SCRUM-296: Im Frontdesk-Modus ist Stempeln per NFC deaktiviert
+        if (device.mode === 'frontdesk') {
+            return res.json({ action: 'frontdesk', message: 'Gerät im Frontdesk-Modus' });
+        }
 
         if (device.mode === 'assign' && device.assign_user_id) {
             await db.query('UPDATE users SET nfc_uid = ? WHERE id = ?', [nfcUid, device.assign_user_id]);
@@ -218,6 +233,16 @@ router.post('/nfc', async (req, res) => {
             if (user.supervisor_id) {
                 io.to(`user-${user.supervisor_id}`).emit('stamp:update', payload);
             }
+        }
+
+        // SCRUM-298: Frontdesk-ESP32s über Anwesenheitsänderung informieren
+        const broadcastPresence = req.app.get('broadcastPresenceChange');
+        if (broadcastPresence) {
+            broadcastPresence({
+                userId: user.id,
+                name: `${user.first_name} ${user.last_name}`,
+                status: type === 'in' ? 'present' : 'absent'
+            });
         }
 
         res.json(result);
