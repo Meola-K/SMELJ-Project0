@@ -1676,3 +1676,112 @@ body.modal-open { overflow: hidden; }
     opacity: 0.6;
     cursor: wait;
 }
+
+/* ── SCRUM-202/204/207: Team-Monatsbericht ──────────────────── */
+.monthly-report-header {
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+.monthly-report-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+.monthly-report-select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.95rem;
+    min-width: 12rem;
+}
+.monthly-report-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    gap: 1rem;
+    margin-top: 0.75rem;
+}
+.monthly-report-summary-item {
+    display: flex;
+    flex-direction: column;
+    padding: 0.75rem 1rem;
+    background: var(--bg);
+    border-radius: 0.5rem;
+    border: 1px solid var(--border);
+}
+.monthly-report-summary-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+}
+.monthly-report-summary-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+/* Druck-Header standardmäßig verstecken, nur beim Drucken sichtbar */
+.monthly-report-print-header {
+    display: none;
+}
+
+@media print {
+    /* Layout aufräumen: nur Bericht-Inhalt drucken */
+    .sidebar,
+    .sidebar-overlay,
+    .mobile-topbar,
+    #toast-container,
+    .modal {
+        display: none !important;
+    }
+    .app-shell {
+        display: block !important;
+    }
+    .main-content {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+    }
+    body {
+        background: #fff !important;
+        color: #000 !important;
+    }
+
+    /* Alle Seiten verstecken, außer der Monatsbericht-Seite */
+    .page { display: none !important; }
+    #page-monthly-report.page { display: block !important; }
+
+    /* Filter / Aktions-Buttons verstecken */
+    .monthly-report-actions,
+    #monthly-report-error,
+    #btn-monthly-report-print {
+        display: none !important;
+    }
+
+    /* Karten flach drucken, Tabelle muss umbrechen */
+    .card {
+        box-shadow: none !important;
+        border: 1px solid #ccc !important;
+        page-break-inside: avoid;
+        margin-bottom: 1rem !important;
+    }
+    .monthly-report-print-header {
+        display: block !important;
+        margin: 0 0 1rem 0;
+    }
+    .monthly-report-print-header h2 {
+        margin: 0 0 0.25rem 0;
+        font-size: 1.4rem;
+    }
+    .monthly-report-print-header p {
+        margin: 0;
+        color: #555;
+    }
+    .page-header h1 { font-size: 1.2rem; }
+    table.table { font-size: 0.85rem; }
+    table.table th, table.table td {
+        border: 1px solid #999 !important;
+    }
+}

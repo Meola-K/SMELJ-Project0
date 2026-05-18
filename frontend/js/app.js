@@ -2579,6 +2579,114 @@ btnReportExport.addEventListener('click', downloadReportCsv);
 
 registerRoute('reports', { pageId: 'page-reports', onEnter: loadReportsPage });
 
+// ── SCRUM-202/204/207: Team-Monatsbericht ──────────────────────
+const monthlyReportSelect = document.getElementById('monthly-report-select');
+const monthlyReportError = document.getElementById('monthly-report-error');
+const monthlyReportTbody = document.getElementById('monthly-report-tbody');
+const monthlyReportEmpty = document.getElementById('monthly-report-empty');
+const monthlyReportPrintMonth = document.getElementById('monthly-report-print-month');
+const monthlyTotalExpected = document.getElementById('monthly-report-total-expected');
+const monthlyTotalActual = document.getElementById('monthly-report-total-actual');
+const monthlyTotalOvertime = document.getElementById('monthly-report-total-overtime');
+const monthlyTotalVacation = document.getElementById('monthly-report-total-vacation');
+const monthlyTotalSick = document.getElementById('monthly-report-total-sick');
+const btnMonthlyReportPrint = document.getElementById('btn-monthly-report-print');
+
+function buildMonthOptions() {
+    // Letzte 12 Monate; aktueller Monat als Default
+    const now = new Date();
+    const opts = [];
+    for (let i = 0; i < 12; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const label = `${MONTH_NAMES_DE[d.getMonth()]} ${d.getFullYear()}`;
+        opts.push({ value, label });
+    }
+    return opts;
+}
+
+function fillMonthlyMonthSelect() {
+    if (monthlyReportSelect.options.length) return;
+    const opts = buildMonthOptions();
+    monthlyReportSelect.innerHTML = opts
+        .map((o, idx) => `<option value="${o.value}"${idx === 0 ? ' selected' : ''}>${esc(o.label)}</option>`)
+        .join('');
+}
+
+function showMonthlyReportError(msg) {
+    monthlyReportError.textContent = msg;
+    monthlyReportError.classList.remove('hidden');
+}
+function hideMonthlyReportError() {
+    monthlyReportError.classList.add('hidden');
+}
+
+function renderMonthlyReport(data) {
+    const { users, totals, month } = data;
+    const [y, m] = month.split('-');
+    const monthLabel = `${MONTH_NAMES_DE[parseInt(m, 10) - 1]} ${y}`;
+    monthlyReportPrintMonth.textContent = monthLabel;
+
+    monthlyTotalExpected.textContent = formatMinutes(totals.expectedMinutes);
+    monthlyTotalActual.textContent = formatMinutes(totals.actualMinutes);
+    monthlyTotalOvertime.textContent = formatMinutes(totals.overtimeMinutes, true);
+    monthlyTotalVacation.textContent = String(totals.vacationDays);
+    monthlyTotalSick.textContent = String(totals.sickDays);
+
+    if (!users.length) {
+        monthlyReportEmpty.classList.remove('hidden');
+        monthlyReportTbody.innerHTML = '';
+        return;
+    }
+    monthlyReportEmpty.classList.add('hidden');
+
+    monthlyReportTbody.innerHTML = users.map(u => {
+        const ot = u.overtimeMinutes;
+        const otColor = ot < 0 ? '#dc2626' : (ot > 0 ? '#16a34a' : '');
+        return `
+            <tr>
+                <td>${esc(u.name)}</td>
+                <td>${formatMinutes(u.expectedMinutes)}</td>
+                <td>${formatMinutes(u.actualMinutes)}</td>
+                <td${otColor ? ` style="color:${otColor}"` : ''}>${formatMinutes(ot, true)}</td>
+                <td>${u.vacationDays}</td>
+                <td>${u.sickDays}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function loadMonthlyReport() {
+    hideMonthlyReportError();
+    const month = monthlyReportSelect.value;
+    if (!month) return;
+
+    monthlyReportTbody.innerHTML = '<tr><td colspan="6" class="text-muted">Lädt…</td></tr>';
+    monthlyTotalExpected.textContent = '–';
+    monthlyTotalActual.textContent = '–';
+    monthlyTotalOvertime.textContent = '–';
+    monthlyTotalVacation.textContent = '–';
+    monthlyTotalSick.textContent = '–';
+
+    try {
+        const data = await apiFetch(`/admin/reports/monthly?month=${encodeURIComponent(month)}`);
+        renderMonthlyReport(data);
+    } catch (err) {
+        showMonthlyReportError('Fehler beim Laden: ' + err.message);
+        monthlyReportTbody.innerHTML = '<tr><td colspan="6" class="text-muted">–</td></tr>';
+    }
+}
+
+async function loadMonthlyReportPage() {
+    fillMonthlyMonthSelect();
+    await loadMonthlyReport();
+}
+
+monthlyReportSelect.addEventListener('change', loadMonthlyReport);
+btnMonthlyReportPrint.addEventListener('click', () => window.print());
+
+registerRoute('monthly-report', { pageId: 'page-monthly-report', onEnter: loadMonthlyReportPage });
+
 // ── SCRUM-193/197/199: Zeiten-CSV-Export ─────────────────────
 const exportFrom = document.getElementById('export-from');
 const exportTo = document.getElementById('export-to');

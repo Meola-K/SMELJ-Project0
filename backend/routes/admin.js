@@ -689,6 +689,173 @@ router.put('/corrections/:id/review', auth, role('vorgesetzter', 'admin'), async
 // SCRUM-159/160: Userseitige Endpoints sind in routes/corrections.js gewandert.
 // Die alte (weniger validierte) POST /admin/corrections-Route wurde entfernt.
 
+// ── SCRUM-202/205: Team-Monatsbericht ────────────────────────────────────────
+// GET /api/admin/reports/monthly?month=YYYY-MM
+// Pro User: Soll-Minuten (aus work_rules), Ist-Minuten (timestamps_log),
+// Überstunden (Ist - Soll), Abwesenheiten (urlaub/krank, approved).
+// Vorgesetzter sieht nur eigene Mitarbeiter, Admin alle.
+router.get('/reports/monthly', auth, role('admin', 'vorgesetzter'), async (req, res) => {
+    try {
+        const { month } = req.query;
+        const monthRe = /^\d{4}-(0[1-9]|1[0-2])$/;
+        if (!month || !monthRe.test(month)) {
+            return res.status(400).json({ error: 'month im Format YYYY-MM erforderlich' });
+        }
+
+        const [yearStr, monthStr] = month.split('-');
+        const year = Number(yearStr);
+        const monthIdx = Number(monthStr) - 1; // 0-11
+        const firstDay = new Date(Date.UTC(year, monthIdx, 1));
+        const lastDay = new Date(Date.UTC(year, monthIdx + 1, 0)); // letzter Tag des Monats
+        const from = firstDay.toISOString().split('T')[0];
+        const to = lastDay.toISOString().split('T')[0];
+
+        let userQuery, userParams;
+        if (req.user.role === 'admin') {
+            userQuery = `SELECT u.id, u.first_name, u.last_name
+                         FROM users u
+                         WHERE u.active = 1
+                         ORDER BY u.last_name, u.first_name`;
+            userParams = [];
+        } else {
+            userQuery = `SELECT u.id, u.first_name, u.last_name
+                         FROM users u
+                         WHERE u.active = 1 AND u.supervisor_id = ?
+                         ORDER BY u.last_name, u.first_name`;
+            userParams = [req.user.id];
+        }
+        const [users] = await db.query(userQuery, userParams);
+        const userIds = users.map(u => u.id);
+
+        let stamps = [];
+        let rules = [];
+        let absences = [];
+        if (userIds.length) {
+            const placeholders = userIds.map(() => '?').join(',');
+            const [s] = await db.query(
+                `SELECT user_id, type, stamp_time FROM timestamps_log
+                 WHERE user_id IN (${placeholders})
+                 AND DATE(stamp_time) BETWEEN ? AND ?
+                 ORDER BY user_id, stamp_time ASC`,
+                [...userIds, from, to]
+            );
+            stamps = s;
+
+            const [r] = await db.query(
+                `SELECT user_id, weekday, max_daily_minutes, work_allowed
+                 FROM work_rules WHERE user_id IN (${placeholders})`,
+                userIds
+            );
+            rules = r;
+
+            // Approved Urlaub/Krank-Anträge, die sich mit dem Monat überlappen
+            const [a] = await db.query(
+                `SELECT user_id, type, date_from, date_to FROM requests
+                 WHERE user_id IN (${placeholders})
+                 AND status = 'approved'
+                 AND type IN ('urlaub', 'krank')
+                 AND date_from <= ? AND date_to >= ?`,
+                [...userIds, to, from]
+            );
+            absences = a;
+        }
+
+        const stampsByUserDay = {};
+        for (const s of stamps) {
+            const day = s.stamp_time.toISOString().split('T')[0];
+            const key = `${s.user_id}|${day}`;
+            if (!stampsByUserDay[key]) stampsByUserDay[key] = [];
+            stampsByUserDay[key].push(s);
+        }
+
+        const rulesByUser = {};
+        for (const r of rules) {
+            if (!rulesByUser[r.user_id]) rulesByUser[r.user_id] = {};
+            rulesByUser[r.user_id][r.weekday] = r;
+        }
+
+        // Werktage pro User aus Anträgen zählen (Sa/So überspringen,
+        // außerhalb des Monats ignorieren)
+        function countAbsenceDays(req) {
+            const start = new Date(req.date_from);
+            const end = new Date(req.date_to);
+            start.setHours(12, 0, 0, 0);
+            end.setHours(12, 0, 0, 0);
+            const monthStart = new Date(year, monthIdx, 1, 12, 0, 0, 0);
+            const monthEnd = new Date(year, monthIdx + 1, 0, 12, 0, 0, 0);
+            const d = start < monthStart ? new Date(monthStart) : new Date(start);
+            const e = end > monthEnd ? monthEnd : end;
+            let days = 0;
+            while (d <= e) {
+                const dow = d.getDay();
+                if (dow !== 0 && dow !== 6) days++;
+                d.setDate(d.getDate() + 1);
+            }
+            return days;
+        }
+
+        const absencesByUser = {};
+        for (const a of absences) {
+            if (!absencesByUser[a.user_id]) absencesByUser[a.user_id] = { urlaub: 0, krank: 0 };
+            absencesByUser[a.user_id][a.type] += countAbsenceDays(a);
+        }
+
+        const result = users.map(u => {
+            const name = `${u.first_name || ''} ${u.last_name || ''}`.trim();
+
+            // Ist-Minuten: alle Tage des Monats durchgehen.
+            // Schlüssel via toISOString().split('T')[0] – gleicher Stil wie
+            // beim /export/csv-Endpoint, damit beide gleich gruppieren.
+            let actualMin = 0;
+            let expectedMin = 0;
+            const current = new Date(year, monthIdx, 1, 12, 0, 0, 0);
+            const monthEnd = new Date(year, monthIdx + 1, 0, 12, 0, 0, 0);
+            while (current <= monthEnd) {
+                const iso = current.toISOString().split('T')[0];
+                const entries = stampsByUserDay[`${u.id}|${iso}`] || [];
+                for (let i = 0; i < entries.length - 1; i += 2) {
+                    if (entries[i].type === 'in' && entries[i + 1]?.type === 'out') {
+                        actualMin += (new Date(entries[i + 1].stamp_time) - new Date(entries[i].stamp_time)) / 60000;
+                    }
+                }
+
+                const weekday = (current.getDay() + 6) % 7;
+                const rule = rulesByUser[u.id]?.[weekday];
+                if (rule && rule.work_allowed) expectedMin += (rule.max_daily_minutes || 0);
+
+                current.setDate(current.getDate() + 1);
+            }
+
+            const abs = absencesByUser[u.id] || { urlaub: 0, krank: 0 };
+            return {
+                id: u.id,
+                firstName: u.first_name,
+                lastName: u.last_name,
+                name,
+                expectedMinutes: Math.round(expectedMin),
+                actualMinutes: Math.round(actualMin),
+                overtimeMinutes: Math.round(actualMin - expectedMin),
+                vacationDays: abs.urlaub,
+                sickDays: abs.krank
+            };
+        });
+
+        const totals = result.reduce((acc, r) => {
+            acc.expectedMinutes += r.expectedMinutes;
+            acc.actualMinutes += r.actualMinutes;
+            acc.overtimeMinutes += r.overtimeMinutes;
+            acc.vacationDays += r.vacationDays;
+            acc.sickDays += r.sickDays;
+            return acc;
+        }, { expectedMinutes: 0, actualMinutes: 0, overtimeMinutes: 0, vacationDays: 0, sickDays: 0 });
+
+        res.json({ month, from, to, totals, users: result });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
 // ── SCRUM-211/212: Abwesenheitsbericht – JSON-Vorschau & CSV-Export ──────────
 // GET /api/admin/export/absences?from=YYYY-MM-DD&to=YYYY-MM-DD
 //                                &type=urlaub|...  (optional)

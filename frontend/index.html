@@ -85,6 +85,10 @@
                     <svg class="sidebar-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     <span>Berichte</span>
                 </a>
+                <a href="#monthly-report" class="sidebar-link" data-route="monthly-report" data-roles="admin,vorgesetzter">
+                    <svg class="sidebar-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    <span>Monatsbericht</span>
+                </a>
                 <a href="#admin" class="sidebar-link" data-route="admin" data-roles="admin,vorgesetzter">
                     <svg class="sidebar-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                     <span>Verwaltung</span>
@@ -785,6 +789,78 @@
                                 </thead>
                                 <tbody id="report-tbody">
                                     <tr><td colspan="9" class="text-muted">Filter wählen und „Vorschau aktualisieren" klicken.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Monthly Team Report Page (SCRUM-202/204) -->
+            <div id="page-monthly-report" class="page hidden">
+                <div class="container">
+                    <div class="page-header monthly-report-header">
+                        <h1>Team-Monatsbericht</h1>
+                        <div class="monthly-report-actions">
+                            <label for="monthly-report-select" class="sr-only">Monat wählen</label>
+                            <select id="monthly-report-select" class="monthly-report-select"></select>
+                            <button class="btn" id="btn-monthly-report-print" type="button">
+                                <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:.4em"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                                Drucken
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="monthly-report-error" class="alert alert-error hidden" role="alert"></div>
+
+                    <!-- Druck-Header (nur beim Drucken sichtbar) -->
+                    <div class="monthly-report-print-header" aria-hidden="true">
+                        <h2>Team-Monatsbericht</h2>
+                        <p id="monthly-report-print-month">–</p>
+                    </div>
+
+                    <div class="card monthly-report-summary-card" id="monthly-report-summary-card">
+                        <h3>Team-Gesamt</h3>
+                        <div class="monthly-report-summary-grid">
+                            <div class="monthly-report-summary-item">
+                                <span class="monthly-report-summary-label">Soll</span>
+                                <span class="monthly-report-summary-value" id="monthly-report-total-expected">–</span>
+                            </div>
+                            <div class="monthly-report-summary-item">
+                                <span class="monthly-report-summary-label">Ist</span>
+                                <span class="monthly-report-summary-value" id="monthly-report-total-actual">–</span>
+                            </div>
+                            <div class="monthly-report-summary-item">
+                                <span class="monthly-report-summary-label">Überstunden</span>
+                                <span class="monthly-report-summary-value" id="monthly-report-total-overtime">–</span>
+                            </div>
+                            <div class="monthly-report-summary-item">
+                                <span class="monthly-report-summary-label">Urlaub (Tage)</span>
+                                <span class="monthly-report-summary-value" id="monthly-report-total-vacation">–</span>
+                            </div>
+                            <div class="monthly-report-summary-item">
+                                <span class="monthly-report-summary-label">Krank (Tage)</span>
+                                <span class="monthly-report-summary-value" id="monthly-report-total-sick">–</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card monthly-report-table-card">
+                        <div id="monthly-report-empty" class="text-muted hidden">Keine Mitarbeiter im Team.</div>
+                        <div class="report-table-wrap">
+                            <table class="table" id="monthly-report-table">
+                                <thead>
+                                    <tr>
+                                        <th>Mitarbeiter</th>
+                                        <th>Soll</th>
+                                        <th>Ist</th>
+                                        <th>Überstunden</th>
+                                        <th>Urlaub</th>
+                                        <th>Krank</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="monthly-report-tbody">
+                                    <tr><td colspan="6" class="text-muted">Lädt…</td></tr>
                                 </tbody>
                             </table>
                         </div>
