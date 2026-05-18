@@ -6,6 +6,14 @@
 const routes = {};
 let currentRoute = null;
 let onNavigateCallback = null;
+let getCurrentUserFn = null;
+
+/**
+ * Funktion registrieren, die den aktuellen User zurückgibt (für Rollen-Check)
+ */
+export function setCurrentUserProvider(fn) {
+    getCurrentUserFn = fn;
+}
 
 /**
  * Route registrieren
@@ -53,6 +61,15 @@ export function startRouter(defaultRoute = 'dashboard') {
         if (!route) {
             window.location.hash = `#${defaultRoute}`;
             return;
+        }
+
+        // Rollen-Check: Falls Route `roles` definiert, prüfen ob User berechtigt ist
+        if (route.roles && route.roles.length > 0) {
+            const user = getCurrentUserFn ? getCurrentUserFn() : null;
+            if (!user || !route.roles.includes(user.role)) {
+                window.location.hash = `#${defaultRoute}`;
+                return;
+            }
         }
 
         // Alle Pages verstecken

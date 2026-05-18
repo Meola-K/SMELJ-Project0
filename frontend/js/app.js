@@ -1,5 +1,5 @@
 import { apiFetch, setToken, clearToken, getToken } from './api.js';
-import { registerRoute, onNavigate, navigateTo, startRouter } from './router.js';
+import { registerRoute, onNavigate, navigateTo, startRouter, setCurrentUserProvider } from './router.js';
 import { showToast, toast, openModal, closeModal as utilsCloseModal, initModal, initModalSystem, confirmModal } from './utils.js';
 
 // ── DOM References ──────────────────────────────────────────
@@ -132,21 +132,25 @@ registerRoute('dashboard', {
 registerRoute('team', {
     pageId: 'page-team',
     onEnter: loadTeamPage,
+    roles: ['admin', 'vorgesetzter'],
 });
 
 registerRoute('groups', {
     pageId: 'page-groups',
     onEnter: loadGroupsPage,
+    roles: ['admin'],
 });
 
 registerRoute('admin', {
     pageId: 'page-admin',
     onEnter: () => { loadUsers(); loadGroups(); },
+    roles: ['admin', 'vorgesetzter'],
 });
 
 registerRoute('requests-overview', {
     pageId: 'page-requests-overview',
     onEnter: loadRequestsOverview,
+    roles: ['admin', 'vorgesetzter'],
 });
 
 // ── Login ───────────────────────────────────────────────────
@@ -221,6 +225,7 @@ window.addEventListener('auth:logout', (e) => {
     closeSidebar();
     window.location.hash = '';
     if (e.detail?.reason === 'session_expired') {
+        showToast('Sitzung abgelaufen', 'Bitte erneut anmelden.', 'warning');
         showLoginError(mapAuthErrorCode('session_expired'));
     }
 });
@@ -246,6 +251,9 @@ function showApp() {
 
     updateSidebarUser();
     updateSidebarForRole(currentUser.role);
+
+    // Rollen-Provider für Router registrieren
+    setCurrentUserProvider(() => currentUser);
 
     if (currentUser.role === 'admin' || currentUser.role === 'vorgesetzter') {
         updateSidebarPendingBadge();
@@ -2363,7 +2371,7 @@ document.getElementById('btn-cancel-rules-modal').addEventListener('click', clos
 document.querySelector('.modal-backdrop-rules')?.addEventListener('click', closeRulesModal);
 btnSubmitRules.addEventListener('click', submitWorkRules);
 
-registerRoute('devices', { pageId: 'page-devices', onEnter: loadDevicesPage });
+registerRoute('devices', { pageId: 'page-devices', onEnter: loadDevicesPage, roles: ['admin'] });
 
 // ── SCRUM-210/211/212: Abwesenheitsbericht ───────────────────
 const reportFrom = document.getElementById('report-from');
@@ -2577,7 +2585,7 @@ btnReportExport.addEventListener('click', downloadReportCsv);
     });
 });
 
-registerRoute('reports', { pageId: 'page-reports', onEnter: loadReportsPage });
+registerRoute('reports', { pageId: 'page-reports', onEnter: loadReportsPage, roles: ['admin'] });
 
 // ── SCRUM-202/204/207: Team-Monatsbericht ──────────────────────
 const monthlyReportSelect = document.getElementById('monthly-report-select');
@@ -2685,7 +2693,7 @@ async function loadMonthlyReportPage() {
 monthlyReportSelect.addEventListener('change', loadMonthlyReport);
 btnMonthlyReportPrint.addEventListener('click', () => window.print());
 
-registerRoute('monthly-report', { pageId: 'page-monthly-report', onEnter: loadMonthlyReportPage });
+registerRoute('monthly-report', { pageId: 'page-monthly-report', onEnter: loadMonthlyReportPage, roles: ['admin', 'vorgesetzter'] });
 
 // ── SCRUM-193/197/199: Zeiten-CSV-Export ─────────────────────
 const exportFrom = document.getElementById('export-from');
@@ -2858,7 +2866,7 @@ btnExportCsv.addEventListener('click', downloadExportCsv);
     });
 });
 
-registerRoute('export', { pageId: 'page-export', onEnter: loadExportPage });
+registerRoute('export', { pageId: 'page-export', onEnter: loadExportPage, roles: ['admin'] });
 
 // ── Monatskalender (SCRUM-Monatskalender) ──────────────────
 // Zeigt eine Monatsansicht mit farblich markierten Abwesenheiten
