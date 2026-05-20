@@ -1785,3 +1785,12 @@ body.modal-open { overflow: hidden; }
         border: 1px solid #999 !important;
     }
 }
+
+/* SCRUM-94: Eigene Arbeitsregeln (Lesezugriff) */
+.work-rules-view-table th,
+.work-rules-view-table td { text-align: left; }
+.wr-limits-title { margin: 1.25rem 0 0.75rem; font-size: 0.95rem; }
+.wr-limits { display: flex; gap: 2rem; flex-wrap: wrap; }
+.wr-limit { display: flex; flex-direction: column; }
+.wr-limit-value { font-size: 1.25rem; font-weight: 700; }
+.wr-limit-label { font-size: 0.75rem; color: var(--text-muted); }

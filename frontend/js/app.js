@@ -471,6 +471,7 @@ async function loadDashboard() {
         historyTo.value = isoToDisplay(now.toISOString().split('T')[0]);
         loadHistory();
         loadVacation();
+        loadMyWorkRules();
         loadMyRequests();
         loadMyCorrections();
 
@@ -478,6 +479,83 @@ async function loadDashboard() {
         else stopTodayTicker();
     } catch (err) {
         console.error(err);
+    }
+}
+
+// ── SCRUM-94: Eigene Arbeitsregeln einsehen (nur Lesezugriff) ─
+async function loadMyWorkRules() {
+    const container = document.getElementById('my-work-rules-content');
+    if (!container || !currentUser) return;
+
+    const labels = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+    const hhmm = (t) => (t ? String(t).substring(0, 5) : null);
+    const hours = (min) => {
+        if (min === null || min === undefined) return '–';
+        return (min / 60).toFixed(2).replace(/\.?0+$/, '') + ' Std.';
+    };
+
+    container.innerHTML = '<p class="text-muted">Lädt...</p>';
+
+    try {
+        const data = await apiFetch(`/admin/work-rules/${currentUser.id}`);
+        const byWeekday = {};
+        (data.rules || []).forEach(r => { byWeekday[r.weekday] = r; });
+
+        const rows = labels.map((label, weekday) => {
+            const rule = byWeekday[weekday];
+            const allowed = !!(rule && rule.work_allowed);
+            const start = allowed ? hhmm(rule.core_start) : null;
+            const end = allowed ? hhmm(rule.core_end) : null;
+            const core = (start && end) ? `${start} – ${end}` : '–';
+            const max = allowed ? hours(rule.max_daily_minutes) : '–';
+            return `
+                <tr>
+                    <td>${label}</td>
+                    <td>${core}</td>
+                    <td>${max}</td>
+                    <td>
+                        <span class="badge ${allowed ? 'badge-active' : 'badge-inactive'}">
+                            ${allowed ? 'Ja' : 'Nein'}
+                        </span>
+                    </td>
+                </tr>`;
+        }).join('');
+
+        const lim = data.limits || {};
+        const limWeekly = lim.max_weekly_minutes ?? null;
+        const limOver = lim.max_overtime_minutes ?? null;
+        const limUnder = lim.max_undertime_minutes ?? null;
+
+        container.innerHTML = `
+            <table class="table work-rules-view-table">
+                <thead>
+                    <tr>
+                        <th>Tag</th>
+                        <th>Kernzeit</th>
+                        <th>Max-Stunden</th>
+                        <th>Erlaubt</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+            <h4 class="wr-limits-title">Meine Zeitlimits</h4>
+            <div class="wr-limits">
+                <div class="wr-limit">
+                    <span class="wr-limit-value">${hours(limWeekly)}</span>
+                    <span class="wr-limit-label">Max. Wochenstunden</span>
+                </div>
+                <div class="wr-limit">
+                    <span class="wr-limit-value">${hours(limOver)}</span>
+                    <span class="wr-limit-label">Max. Überstunden</span>
+                </div>
+                <div class="wr-limit">
+                    <span class="wr-limit-value">${hours(limUnder)}</span>
+                    <span class="wr-limit-label">Max. Minusstunden</span>
+                </div>
+            </div>`;
+    } catch (err) {
+        console.error(err);
+        container.innerHTML = '<p class="text-muted">Arbeitsregeln konnten nicht geladen werden.</p>';
     }
 }
 
