@@ -1794,3 +1794,221 @@ body.modal-open { overflow: hidden; }
 .wr-limit { display: flex; flex-direction: column; }
 .wr-limit-value { font-size: 1.25rem; font-weight: 700; }
 .wr-limit-label { font-size: 0.75rem; color: var(--text-muted); }
+
+/* ── US-065: Horizontale Fixierung – Verwaltungstabellen ────────
+   Tabellen passen sich der verfügbaren Breite an.
+   Keine horizontale Scrollleiste auf Desktop/Tablet.
+   Auf Mobile (≤ 640px) greift das Card-Layout (US-064).       */
+
+/* Wrapper: kein overflow-x, volle Breite */
+.admin-table-wrap {
+    width: 100%;
+    overflow-x: hidden; /* niemals horizontale Scrollleiste */
+}
+
+.admin-table-wrap .table {
+    width: 100%;
+    table-layout: fixed;
+}
+
+/* Ellipsis für alle Zellen, damit lange Texte nicht brechen */
+.admin-table-wrap .table th,
+.admin-table-wrap .table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 0; /* notwendig damit text-overflow bei table-layout:fixed greift */
+}
+
+/* Aktionen-Spalte: niemals abschneiden, immer voll sichtbar */
+.admin-table-wrap .table td.actions-cell,
+.admin-table-wrap .table th.col-actions {
+    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+    width: auto;
+}
+
+/* ── Spalten-Prioritäten (ausblenden bei knapper Breite) ──────── */
+/* col-hide-sm: ausblenden ab ≤ 900px  (niedrige Priorität)      */
+/* col-hide-md: ausblenden ab ≤ 1024px (mittlere Priorität)      */
+
+/* Spaltendefinitionen: Prozentbreiten je Tabelle */
+
+/* Benutzerverwaltung: Name E-Mail Rolle Gruppe Vorgesetzter Status Aktionen */
+#users-table { table-layout: fixed; }
+#users-table col.col-name        { width: 18%; }
+#users-table col.col-email       { width: 22%; }
+#users-table col.col-role        { width: 11%; }
+#users-table col.col-group       { width: 12%; }
+#users-table col.col-supervisor  { width: 14%; }
+#users-table col.col-status      { width: 9%; }
+#users-table col.col-actions     { width: 14%; }
+
+/* Ausstehende Anträge: Mitarbeiter Typ Zeitraum Notiz Aktionen */
+#pending-table { table-layout: fixed; }
+#pending-table col.col-name      { width: 22%; }
+#pending-table col.col-type      { width: 14%; }
+#pending-table col.col-period    { width: 20%; }
+#pending-table col.col-note      { width: 24%; }
+#pending-table col.col-actions   { width: 20%; }
+
+/* Alle Anträge: Mitarbeiter Typ Zeitraum Status Bearbeiter Eingereicht */
+#all-requests-table { table-layout: fixed; }
+#all-requests-table col.col-name      { width: 20%; }
+#all-requests-table col.col-type      { width: 14%; }
+#all-requests-table col.col-period    { width: 20%; }
+#all-requests-table col.col-status    { width: 12%; }
+#all-requests-table col.col-reviewer  { width: 18%; }
+#all-requests-table col.col-submitted { width: 16%; }
+
+/* Korrekturen: Mitarbeiter Typ Original Korrektur Begründung Aktionen */
+#corrections-table { table-layout: fixed; }
+#corrections-table col.col-name     { width: 18%; }
+#corrections-table col.col-type     { width: 12%; }
+#corrections-table col.col-original { width: 16%; }
+#corrections-table col.col-corrected{ width: 16%; }
+#corrections-table col.col-reason   { width: 20%; }
+#corrections-table col.col-actions  { width: 18%; }
+
+/* Geräte: ID Name Standort Modus Status Zuletzt gesehen Aktionen */
+#devices-table { table-layout: fixed; }
+#devices-table col.col-id       { width: 18%; }
+#devices-table col.col-name     { width: 16%; }
+#devices-table col.col-location { width: 13%; }
+#devices-table col.col-mode     { width: 16%; }
+#devices-table col.col-status   { width: 10%; }
+#devices-table col.col-lastseen { width: 14%; }
+#devices-table col.col-actions  { width: 13%; }
+
+/* NFC-Tabelle */
+#nfc-table { table-layout: fixed; }
+#nfc-table col.col-name    { width: 40%; }
+#nfc-table col.col-uid     { width: 40%; }
+#nfc-table col.col-actions { width: 20%; }
+
+/* Gruppen: Name Mitglieder Erstellt Aktionen */
+.groups-page .table { table-layout: fixed; }
+.groups-page col.col-name    { width: 45%; }
+.groups-page col.col-members { width: 20%; }
+.groups-page col.col-created { width: 20%; }
+.groups-page col.col-actions { width: 15%; }
+
+@media (max-width: 1024px) {
+    .col-hide-md { display: none; }
+}
+
+@media (max-width: 900px) {
+    .col-hide-sm { display: none; }
+}
+
+/* ── Mobile: Card-Layout für Verwaltungstabellen (US-064) ─────── */
+@media (max-width: 640px) {
+    .admin-table-wrap {
+        overflow-x: hidden;
+    }
+
+    .admin-table-wrap .table,
+    .admin-table-wrap .table thead,
+    .admin-table-wrap .table tbody,
+    .admin-table-wrap .table th,
+    .admin-table-wrap .table td,
+    .admin-table-wrap .table tr {
+        display: block;
+    }
+
+    /* colgroup-Spalten auf Mobile nicht anzeigen */
+    .admin-table-wrap .table colgroup,
+    .admin-table-wrap .table col {
+        display: none;
+    }
+
+    /* Tabellenheader verstecken (Labels kommen über data-label) */
+    .admin-table-wrap .table thead tr {
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+    }
+
+    .admin-table-wrap .table tbody tr {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        margin-bottom: 0.75rem;
+        padding: 0.75rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        overflow: visible;
+    }
+
+    .admin-table-wrap .table td {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        padding: 0.35rem 0;
+        border-bottom: none;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        max-width: none;
+        font-size: 0.875rem;
+    }
+
+    /* col-hide-sm und col-hide-md auf Mobile ebenfalls ausblenden */
+    .admin-table-wrap .table .col-hide-sm,
+    .admin-table-wrap .table .col-hide-md {
+        display: none;
+    }
+
+    .admin-table-wrap .table td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        min-width: 7rem;
+        flex-shrink: 0;
+        padding-top: 0.1rem;
+    }
+
+    /* Aktionen-Zeile: ohne Label, volle Breite, rechtsbündig */
+    .admin-table-wrap .table td.actions-cell {
+        justify-content: flex-end;
+        padding-top: 0.5rem;
+        border-top: 1px solid var(--border);
+        margin-top: 0.25rem;
+        flex-wrap: wrap;
+        overflow: visible;
+    }
+    .admin-table-wrap .table td.actions-cell::before {
+        display: none;
+    }
+}
+
+/* Wenn admin-table-wrap gleichzeitig .card ist: kein Innenabstand oben/unten für die Tabelle */
+.card.admin-table-wrap {
+    padding: 0;
+}
+.card.admin-table-wrap > h3 {
+    padding: 1.5rem 1.5rem 0;
+}
+.card.admin-table-wrap > p,
+.card.admin-table-wrap > .text-muted {
+    padding: 0 1.5rem;
+}
+/* Letzter tbody tr bekommt keinen unteren Border */
+.admin-table-wrap .table tbody tr:last-child td {
+    border-bottom: none;
+}
+/* Auf Mobile: card.admin-table-wrap Padding wiederherstellen */
+@media (max-width: 640px) {
+    .card.admin-table-wrap {
+        padding: 0.75rem;
+    }
+    .card.admin-table-wrap > h3 {
+        padding: 0;
+        margin-bottom: 0.75rem;
+    }
+    .card.admin-table-wrap > p,
+    .card.admin-table-wrap > .text-muted {
+        padding: 0;
+    }
+}

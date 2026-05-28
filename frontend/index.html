@@ -455,7 +455,7 @@
 
             <!-- Groups Page -->
             <div id="page-groups" class="page hidden">
-                <div class="container">
+                <div class="container groups-page">
                     <div class="page-header">
                         <h1>Gruppenverwaltung</h1>
                         <div class="page-header-actions">
@@ -464,12 +464,20 @@
                             <button class="btn btn-primary" id="btn-create-group">+ Gruppe erstellen</button>
                         </div>
                     </div>
+                    <div class="admin-table-wrap">
                     <table class="table">
+                        <colgroup>
+                            <col class="col-name">
+                            <col class="col-members col-hide-sm">
+                            <col class="col-created col-hide-sm">
+                            <col class="col-actions">
+                        </colgroup>
                         <thead>
-                            <tr><th>Name</th><th>Mitglieder</th><th>Erstellt am</th><th>Aktionen</th></tr>
+                            <tr><th>Name</th><th class="col-hide-sm">Mitglieder</th><th class="col-hide-sm">Erstellt am</th><th class="col-actions">Aktionen</th></tr>
                         </thead>
                         <tbody id="groups-tbody"></tbody>
                     </table>
+                    </div>
                 </div>
             </div>
 
@@ -533,16 +541,23 @@
 
                     <!-- Tab: Ausstehend -->
                     <div id="req-panel-pending" class="req-panel" role="tabpanel" aria-labelledby="tab-pending">
-                        <div class="card">
+                        <div class="card admin-table-wrap">
                             <div id="pending-empty" class="text-muted hidden">Keine ausstehenden Anträge.</div>
                             <table class="table" id="pending-table">
+                                <colgroup>
+                                    <col class="col-name">
+                                    <col class="col-type">
+                                    <col class="col-period">
+                                    <col class="col-note col-hide-sm">
+                                    <col class="col-actions">
+                                </colgroup>
                                 <thead>
                                     <tr>
                                         <th>Mitarbeiter</th>
                                         <th>Typ</th>
                                         <th>Zeitraum</th>
-                                        <th>Notiz</th>
-                                        <th>Aktionen</th>
+                                        <th class="col-hide-sm">Notiz</th>
+                                        <th class="col-actions">Aktionen</th>
                                     </tr>
                                 </thead>
                                 <tbody id="pending-tbody"></tbody>
@@ -587,17 +602,25 @@
                                 <span class="badge badge-type type-sonderurlaub">Sonderurlaub</span>
                             </div>
                         </div>
-                        <div class="card">
+                        <div class="card admin-table-wrap">
                             <div id="all-empty" class="text-muted hidden">Keine Anträge gefunden.</div>
                             <table class="table" id="all-requests-table">
+                                <colgroup>
+                                    <col class="col-name">
+                                    <col class="col-type">
+                                    <col class="col-period">
+                                    <col class="col-status">
+                                    <col class="col-reviewer col-hide-md">
+                                    <col class="col-submitted col-hide-sm">
+                                </colgroup>
                                 <thead>
                                     <tr>
                                         <th>Mitarbeiter</th>
                                         <th>Typ</th>
                                         <th>Zeitraum</th>
                                         <th>Status</th>
-                                        <th>Bearbeiter</th>
-                                        <th>Eingereicht</th>
+                                        <th class="col-hide-md">Bearbeiter</th>
+                                        <th class="col-hide-sm">Eingereicht</th>
                                     </tr>
                                 </thead>
                                 <tbody id="all-requests-tbody"></tbody>
@@ -607,17 +630,25 @@
 
                     <!-- Tab: Korrekturen (SCRUM-163) -->
                     <div id="req-panel-corrections" class="req-panel hidden" role="tabpanel" aria-labelledby="tab-corrections">
-                        <div class="card">
+                        <div class="card admin-table-wrap">
                             <div id="corrections-empty" class="text-muted hidden">Keine offenen Korrekturanträge.</div>
                             <table class="table" id="corrections-table">
+                                <colgroup>
+                                    <col class="col-name">
+                                    <col class="col-type">
+                                    <col class="col-original col-hide-sm">
+                                    <col class="col-corrected col-hide-sm">
+                                    <col class="col-reason col-hide-md">
+                                    <col class="col-actions">
+                                </colgroup>
                                 <thead>
                                     <tr>
                                         <th>Mitarbeiter</th>
                                         <th>Typ</th>
-                                        <th>Original</th>
-                                        <th>Korrektur</th>
-                                        <th>Begründung</th>
-                                        <th>Aktionen</th>
+                                        <th class="col-hide-sm">Original</th>
+                                        <th class="col-hide-sm">Korrektur</th>
+                                        <th class="col-hide-md">Begründung</th>
+                                        <th class="col-actions">Aktionen</th>
                                     </tr>
                                 </thead>
                                 <tbody id="corrections-tbody"></tbody>
@@ -634,17 +665,26 @@
                         <h1>Benutzerverwaltung</h1>
                         <button id="btn-open-create-user" class="btn btn-primary">+ Nutzer Anlegen</button>
                     </div>
-                    <div id="users-table-wrap">
+                    <div id="users-table-wrap" class="admin-table-wrap">
                         <table class="table" id="users-table">
+                            <colgroup>
+                                <col class="col-name">
+                                <col class="col-email col-hide-sm">
+                                <col class="col-role">
+                                <col class="col-group col-hide-md">
+                                <col class="col-supervisor col-hide-md">
+                                <col class="col-status">
+                                <col class="col-actions">
+                            </colgroup>
                             <thead>
                                 <tr>
                                     <th>Name</th>
-                                    <th>E-Mail</th>
+                                    <th class="col-hide-sm">E-Mail</th>
                                     <th>Rolle</th>
-                                    <th>Gruppe</th>
-                                    <th>Vorgesetzter</th>
+                                    <th class="col-hide-md">Gruppe</th>
+                                    <th class="col-hide-md">Vorgesetzter</th>
                                     <th>Status</th>
-                                    <th>Aktionen</th>
+                                    <th class="col-actions">Aktionen</th>
                                 </tr>
                             </thead>
                             <tbody id="users-tbody"></tbody>
@@ -660,18 +700,27 @@
                         <h1>Stempeluhren</h1>
                         <button id="btn-open-create-device" class="btn btn-primary">+ Gerät registrieren</button>
                     </div>
-                    <div class="card">
+                    <div class="card admin-table-wrap">
                         <div id="devices-empty" class="text-muted hidden">Keine Geräte registriert.</div>
                         <table class="table" id="devices-table">
+                            <colgroup>
+                                <col class="col-id col-hide-sm">
+                                <col class="col-name">
+                                <col class="col-location col-hide-md">
+                                <col class="col-mode">
+                                <col class="col-status">
+                                <col class="col-lastseen col-hide-sm">
+                                <col class="col-actions">
+                            </colgroup>
                             <thead>
                                 <tr>
-                                    <th>ID</th>
+                                    <th class="col-hide-sm">ID</th>
                                     <th>Name</th>
-                                    <th>Standort</th>
+                                    <th class="col-hide-md">Standort</th>
                                     <th>Modus</th>
                                     <th>Status</th>
-                                    <th>Zuletzt gesehen</th>
-                                    <th>Aktionen</th>
+                                    <th class="col-hide-sm">Zuletzt gesehen</th>
+                                    <th class="col-actions">Aktionen</th>
                                 </tr>
                             </thead>
                             <tbody id="devices-tbody"></tbody>
@@ -695,11 +744,16 @@
                         <div id="assign-status" class="hidden" style="margin-top:1rem"></div>
                     </div>
 
-                    <div class="card" style="margin-top:1.5rem">
+                    <div class="card admin-table-wrap" style="margin-top:1.5rem">
                         <h3>NFC-Zuweisungen</h3>
                         <table class="table" id="nfc-table">
+                            <colgroup>
+                                <col class="col-name">
+                                <col class="col-uid">
+                                <col class="col-actions">
+                            </colgroup>
                             <thead>
-                                <tr><th>Mitarbeiter</th><th>NFC-UID</th><th>Aktionen</th></tr>
+                                <tr><th>Mitarbeiter</th><th>NFC-UID</th><th class="col-actions">Aktionen</th></tr>
                             </thead>
                             <tbody id="nfc-tbody"></tbody>
                         </table>

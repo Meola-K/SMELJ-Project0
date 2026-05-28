@@ -759,12 +759,12 @@ function renderUsersTable() {
         .map(
             (u) => `
         <tr>
-            <td>${esc(u.first_name)} ${esc(u.last_name)}</td>
-            <td>${esc(u.email)}</td>
-            <td><span class="badge badge-role">${roleLabels[u.role] || u.role}</span></td>
-            <td>${esc(u.group_name || '–')}</td>
-            <td>${esc(u.supervisor_name || '–')}</td>
-            <td><span class="badge ${u.active ? 'badge-active' : 'badge-inactive'}">${u.active ? 'Aktiv' : 'Inaktiv'}</span></td>
+            <td data-label="Name">${esc(u.first_name)} ${esc(u.last_name)}</td>
+            <td class="col-hide-sm" data-label="E-Mail">${esc(u.email)}</td>
+            <td data-label="Rolle"><span class="badge badge-role">${roleLabels[u.role] || u.role}</span></td>
+            <td class="col-hide-md" data-label="Gruppe">${esc(u.group_name || '–')}</td>
+            <td class="col-hide-md" data-label="Vorgesetzter">${esc(u.supervisor_name || '–')}</td>
+            <td data-label="Status"><span class="badge ${u.active ? 'badge-active' : 'badge-inactive'}">${u.active ? 'Aktiv' : 'Inaktiv'}</span></td>
             <td class="actions-cell">
                 <button class="btn btn-sm" onclick="window._editUser(${u.id})">Bearbeiten</button>
                 <button class="btn btn-sm" onclick="window._editWorkRules(${u.id})">Arbeitsregeln</button>
@@ -1097,10 +1097,10 @@ function renderGroupsTable() {
     }
     tbody.innerHTML = allGroups.map(g => `
         <tr>
-            <td>${esc(g.name)}</td>
-            <td>${g.member_count}</td>
-            <td>${formatDate(g.created_at)}</td>
-            <td>
+            <td data-label="Name">${esc(g.name)}</td>
+            <td class="col-hide-sm" data-label="Mitglieder">${g.member_count}</td>
+            <td class="col-hide-sm" data-label="Erstellt am">${formatDate(g.created_at)}</td>
+            <td class="actions-cell">
                 <button class="btn btn-sm btn-danger" onclick="window._deleteGroup(${g.id}, '${esc(g.name)}', ${g.member_count})">Löschen</button>
             </td>
         </tr>
@@ -1842,10 +1842,10 @@ function renderPendingRequests(requests) {
         const zeitraum = from === to ? from : `${from} – ${to}`;
         return `
             <tr>
-                <td><strong>${esc(r.user_name)}</strong></td>
-                <td>${renderTypeBadge(r)}</td>
-                <td>${zeitraum}</td>
-                <td>${r.note ? esc(r.note) : '<span class="text-muted">–</span>'}</td>
+                <td data-label="Mitarbeiter"><strong>${esc(r.user_name)}</strong></td>
+                <td data-label="Typ">${renderTypeBadge(r)}</td>
+                <td data-label="Zeitraum">${zeitraum}</td>
+                <td class="col-hide-sm" data-label="Notiz">${r.note ? esc(r.note) : '<span class="text-muted">–</span>'}</td>
                 <td class="actions-cell">
                     <button class="btn btn-sm btn-approve" onclick="window._reviewRequest(${r.id}, 'approved')">Genehmigen</button>
                     <button class="btn btn-sm btn-deny" onclick="window._reviewRequest(${r.id}, 'denied')">Ablehnen</button>
@@ -1889,12 +1889,12 @@ function renderAllRequests(requests) {
         const eingereicht = r.created_at ? formatDate(r.created_at) : '–';
         return `
             <tr>
-                <td>${esc(r.user_name)}</td>
-                <td>${renderTypeBadge(r)}</td>
-                <td>${zeitraum}</td>
-                <td><span class="badge ${statusClass}">${statusLabel}</span></td>
-                <td>${bearbeiter}</td>
-                <td>${eingereicht}</td>
+                <td data-label="Mitarbeiter">${esc(r.user_name)}</td>
+                <td data-label="Typ">${renderTypeBadge(r)}</td>
+                <td data-label="Zeitraum">${zeitraum}</td>
+                <td data-label="Status"><span class="badge ${statusClass}">${statusLabel}</span></td>
+                <td class="col-hide-md" data-label="Bearbeiter">${bearbeiter}</td>
+                <td class="col-hide-sm" data-label="Eingereicht">${eingereicht}</td>
             </tr>
         `;
     }).join('');
@@ -1964,11 +1964,11 @@ function renderPendingCorrections(corrs) {
             : '<span class="text-muted">–</span>';
         return `
             <tr>
-                <td><strong>${esc(c.user_name)}</strong></td>
-                <td><span class="badge badge-pending">${typeLabel}</span></td>
-                <td>${original}</td>
-                <td>${corrected}</td>
-                <td>${esc(c.reason)}</td>
+                <td data-label="Mitarbeiter"><strong>${esc(c.user_name)}</strong></td>
+                <td data-label="Typ"><span class="badge badge-pending">${typeLabel}</span></td>
+                <td class="col-hide-sm" data-label="Original">${original}</td>
+                <td class="col-hide-sm" data-label="Korrektur">${corrected}</td>
+                <td class="col-hide-md" data-label="Begründung">${esc(c.reason)}</td>
                 <td class="actions-cell">
                     <button class="btn btn-sm btn-approve" onclick="window._reviewCorrection(${c.id}, 'approved')">Genehmigen</button>
                     <button class="btn btn-sm btn-deny" onclick="window._reviewCorrection(${c.id}, 'denied')">Ablehnen</button>
@@ -2064,12 +2064,12 @@ function renderDevicesTable(devices) {
             : `<select class="device-mode-select" data-device-id="${esc(d.id)}" onchange="window._changeDeviceMode(this)">${modeOptions}</select>`;
         return `
             <tr>
-                <td><code>${esc(d.id)}</code></td>
-                <td>${esc(d.name)}</td>
-                <td>${esc(d.location || '–')}</td>
-                <td>${modeCell}</td>
-                <td>${statusBadge}</td>
-                <td>${formatLastSeen(d.last_seen)}</td>
+                <td class="col-hide-sm" data-label="ID"><code>${esc(d.id)}</code></td>
+                <td data-label="Name">${esc(d.name)}</td>
+                <td class="col-hide-md" data-label="Standort">${esc(d.location || '–')}</td>
+                <td data-label="Modus">${modeCell}</td>
+                <td data-label="Status">${statusBadge}</td>
+                <td class="col-hide-sm" data-label="Zuletzt gesehen">${formatLastSeen(d.last_seen)}</td>
                 <td class="actions-cell">
                     <button class="btn btn-sm ${d.active ? 'btn-danger' : 'btn-success'}" onclick="window._toggleDevice('${esc(d.id)}', ${d.active})">${d.active ? 'Deaktivieren' : 'Aktivieren'}</button>
                     <button class="btn btn-sm btn-danger" onclick="window._deleteDevice('${esc(d.id)}', '${esc(d.name)}')">Löschen</button>
@@ -2109,9 +2109,9 @@ function renderNfcTable() {
 
     tbody.innerHTML = usersWithNfc.map(u => `
         <tr>
-            <td>${esc(u.first_name)} ${esc(u.last_name)}</td>
-            <td><code>${esc(u.nfc_uid)}</code></td>
-            <td><button class="btn btn-sm btn-danger" onclick="window._removeNfc(${u.id}, '${esc(u.first_name)} ${esc(u.last_name)}')">Entfernen</button></td>
+            <td data-label="Mitarbeiter">${esc(u.first_name)} ${esc(u.last_name)}</td>
+            <td data-label="NFC-UID"><code>${esc(u.nfc_uid)}</code></td>
+            <td class="actions-cell"><button class="btn btn-sm btn-danger" onclick="window._removeNfc(${u.id}, '${esc(u.first_name)} ${esc(u.last_name)}')">Entfernen</button></td>
         </tr>
     `).join('');
 }
