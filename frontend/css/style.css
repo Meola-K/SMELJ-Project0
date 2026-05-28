@@ -16,6 +16,7 @@
     --text-muted: #64748b;
     --radius: 8px;
     --sidebar-width: 240px;
+    --sidebar-collapsed-width: 64px;
     --sidebar-bg: #0f172a;
     --sidebar-text: #cbd5e1;
     --sidebar-text-hover: #ffffff;
@@ -116,11 +117,16 @@ body {
     flex-direction: column;
     z-index: 200;
     overflow-y: auto;
+    transition: width 0.25s ease;
 }
 
 .sidebar-header {
     padding: 1.25rem 1rem;
     border-bottom: 1px solid rgba(255,255,255,0.08);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
 }
 
 .sidebar-logo {
@@ -170,6 +176,7 @@ body {
     font-size: 0.875rem;
     font-weight: 500;
     transition: background 0.15s, color 0.15s;
+    position: relative;
 }
 
 .sidebar-link:hover {
@@ -361,6 +368,7 @@ body.modal-open { overflow: hidden; }
     flex: 1;
     margin-left: var(--sidebar-width);
     min-height: 100vh;
+    transition: margin-left 0.25s ease;
 }
 
 .main-content .page {
@@ -2010,5 +2018,76 @@ body.modal-open { overflow: hidden; }
     .card.admin-table-wrap > p,
     .card.admin-table-wrap > .text-muted {
         padding: 0;
+    }
+}
+
+/* ── SCRUM-325: Sidebar einklappen (Desktop) ────────── */
+
+/* Collapse-/Burger-Button im Sidebar-Header – nur Desktop */
+.sidebar-collapse-btn {
+    display: none;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    border: none;
+    background: rgba(255,255,255,0.06);
+    border-radius: 6px;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+}
+.sidebar-collapse-btn svg {
+    width: 18px;
+    height: 18px;
+    stroke: var(--sidebar-text);
+}
+.sidebar-collapse-btn:hover { background: rgba(255,255,255,0.12); }
+.sidebar-collapse-btn:hover svg { stroke: #fff; }
+
+@media (min-width: 769px) {
+    .sidebar-collapse-btn { display: flex; }
+
+    /* Eingeklappt: schmale Leiste, nur Icons */
+    .app-shell.sidebar-collapsed .sidebar { width: var(--sidebar-collapsed-width); }
+    .app-shell.sidebar-collapsed .main-content { margin-left: var(--sidebar-collapsed-width); }
+
+    /* Texte ausblenden (Label, Logo-Text, Benutzerinfo) */
+    .app-shell.sidebar-collapsed .sidebar-logo,
+    .app-shell.sidebar-collapsed .sidebar-link > span:not(.sidebar-badge),
+    .app-shell.sidebar-collapsed .sidebar-user-info {
+        display: none;
+    }
+
+    /* Header: nur noch der Burger-Button, zentriert */
+    .app-shell.sidebar-collapsed .sidebar-header {
+        justify-content: center;
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    /* Nav-Links: Icon zentriert */
+    .app-shell.sidebar-collapsed .sidebar-link {
+        justify-content: center;
+        gap: 0;
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    /* Badge (Anträge) als kleiner Indikator oben rechts am Icon */
+    .app-shell.sidebar-collapsed .sidebar-badge {
+        position: absolute;
+        top: 2px;
+        right: 8px;
+        margin: 0;
+        min-width: 16px;
+        padding: 0.05rem 0.3rem;
+        font-size: 0.6rem;
+    }
+
+    /* Footer: Avatar über Logout, zentriert */
+    .app-shell.sidebar-collapsed .sidebar-footer {
+        flex-direction: column;
+        gap: 0.5rem;
     }
 }

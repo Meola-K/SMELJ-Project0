@@ -123,6 +123,40 @@ sidebarNav.addEventListener('click', (e) => {
     }
 });
 
+// ── SCRUM-325: Sidebar einklappen (Desktop) + Persistenz ────
+const btnSidebarCollapse = document.getElementById('btn-sidebar-collapse');
+const SIDEBAR_STATE_KEY = 'zs_sidebar';
+
+// Im eingeklappten Zustand das Label als Tooltip am Icon zeigen
+function setSidebarLinkTitles(collapsed) {
+    sidebarNav.querySelectorAll('.sidebar-link').forEach(link => {
+        const label = link.querySelector('span:not(.sidebar-badge)');
+        if (collapsed && label) {
+            link.setAttribute('title', label.textContent.trim());
+        } else {
+            link.removeAttribute('title');
+        }
+    });
+}
+
+function applySidebarCollapsed(collapsed) {
+    appShell.classList.toggle('sidebar-collapsed', collapsed);
+    btnSidebarCollapse.setAttribute('aria-expanded', String(!collapsed));
+    const label = collapsed ? 'Seitenleiste ausklappen' : 'Seitenleiste einklappen';
+    btnSidebarCollapse.setAttribute('aria-label', label);
+    btnSidebarCollapse.setAttribute('title', label);
+    setSidebarLinkTitles(collapsed);
+}
+
+btnSidebarCollapse.addEventListener('click', () => {
+    const collapsed = !appShell.classList.contains('sidebar-collapsed');
+    applySidebarCollapsed(collapsed);
+    try { localStorage.setItem(SIDEBAR_STATE_KEY, collapsed ? 'collapsed' : 'expanded'); } catch (e) {}
+});
+
+// Gespeicherten Zustand beim Laden wiederherstellen
+applySidebarCollapsed(localStorage.getItem(SIDEBAR_STATE_KEY) === 'collapsed');
+
 // ── Routes registrieren ─────────────────────────────────────
 registerRoute('dashboard', {
     pageId: 'page-dashboard',
