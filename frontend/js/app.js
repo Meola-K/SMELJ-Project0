@@ -163,6 +163,31 @@ registerRoute('dashboard', {
     onEnter: loadDashboard,
 });
 
+// SCRUM-331/332: Mitarbeiter-Funktionen als eigene Routen (für alle Rollen verfügbar)
+registerRoute('stempeln', {
+    pageId: 'page-stempeln',
+    onEnter: loadStamping,
+    roles: ['admin', 'vorgesetzter', 'arbeiter'],
+});
+
+registerRoute('antraege', {
+    pageId: 'page-antraege',
+    onEnter: loadRequestsPage,
+    roles: ['admin', 'vorgesetzter', 'arbeiter'],
+});
+
+registerRoute('historie', {
+    pageId: 'page-historie',
+    onEnter: loadHistoryPage,
+    roles: ['admin', 'vorgesetzter', 'arbeiter'],
+});
+
+registerRoute('profil', {
+    pageId: 'page-profil',
+    onEnter: loadMyWorkRules,
+    roles: ['admin', 'vorgesetzter', 'arbeiter'],
+});
+
 registerRoute('team', {
     pageId: 'page-team',
     onEnter: loadTeamPage,
@@ -491,29 +516,47 @@ function stopTodayTicker() {
     todayTimer = null;
 }
 
+// Dashboard: nur Kern-Widgets (Stempel-Status, heutige Arbeitszeit, Zeitkonto, Resturlaub)
 async function loadDashboard() {
     try {
         const data = await apiFetch('/stamp/today');
         isStampedIn = data.isStampedIn;
         const lastStamp = data.stamps && data.stamps.length ? data.stamps[data.stamps.length - 1] : null;
         updateStampUI(data.todayMinutes, data.balance, lastStamp);
-        renderTodayStamps(data.stamps);
-
-        const now = new Date();
-        const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        historyFrom.value = isoToDisplay(firstOfMonth.toISOString().split('T')[0]);
-        historyTo.value = isoToDisplay(now.toISOString().split('T')[0]);
-        loadHistory();
         loadVacation();
-        loadMyWorkRules();
-        loadMyRequests();
-        loadMyCorrections();
 
         if (isStampedIn) startTodayTicker();
         else stopTodayTicker();
     } catch (err) {
         console.error(err);
     }
+}
+
+// SCRUM-331: Stempeln-Seite – heutige Stempelzeiten
+async function loadStamping() {
+    try {
+        const data = await apiFetch('/stamp/today');
+        renderTodayStamps(data.stamps);
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+// SCRUM-331: Meine-Anträge-Seite – Anträge und Zeitkorrekturen
+function loadRequestsPage() {
+    loadMyRequests();
+    loadMyCorrections();
+}
+
+// SCRUM-331: Stempelhistorie-Seite – Standardzeitraum (aktueller Monat) setzen, falls leer
+function loadHistoryPage() {
+    if (!historyFrom.value || !historyTo.value) {
+        const now = new Date();
+        const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        historyFrom.value = isoToDisplay(firstOfMonth.toISOString().split('T')[0]);
+        historyTo.value = isoToDisplay(now.toISOString().split('T')[0]);
+    }
+    loadHistory();
 }
 
 // ── SCRUM-94: Eigene Arbeitsregeln einsehen (nur Lesezugriff) ─
