@@ -164,12 +164,6 @@ registerRoute('dashboard', {
 });
 
 // SCRUM-331/332: Mitarbeiter-Funktionen als eigene Routen (für alle Rollen verfügbar)
-registerRoute('stempeln', {
-    pageId: 'page-stempeln',
-    onEnter: loadStamping,
-    roles: ['admin', 'vorgesetzter', 'arbeiter'],
-});
-
 registerRoute('antraege', {
     pageId: 'page-antraege',
     onEnter: loadRequestsPage,
@@ -523,27 +517,18 @@ function stopTodayTicker() {
     todayTimer = null;
 }
 
-// Dashboard: nur Kern-Widgets (Stempel-Status, heutige Arbeitszeit, Zeitkonto, Resturlaub)
+// Dashboard: Kern-Widgets (Stempel-Status, heutige Stempelzeiten, heutige Arbeitszeit, Zeitkonto, Resturlaub)
 async function loadDashboard() {
     try {
         const data = await apiFetch('/stamp/today');
         isStampedIn = data.isStampedIn;
         const lastStamp = data.stamps && data.stamps.length ? data.stamps[data.stamps.length - 1] : null;
         updateStampUI(data.todayMinutes, data.balance, lastStamp);
+        renderTodayStamps(data.stamps);
         loadVacation();
 
         if (isStampedIn) startTodayTicker();
         else stopTodayTicker();
-    } catch (err) {
-        console.error(err);
-    }
-}
-
-// SCRUM-331: Stempeln-Seite – heutige Stempelzeiten
-async function loadStamping() {
-    try {
-        const data = await apiFetch('/stamp/today');
-        renderTodayStamps(data.stamps);
     } catch (err) {
         console.error(err);
     }
