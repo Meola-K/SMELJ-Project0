@@ -4,10 +4,15 @@ import { auth } from '../middleware/auth.js';
 
 const router = Router();
 
-async function getLastStamp(userId) {
+// Letzter Stempel des heutigen Tages – Basis für die in/out-Umschaltung.
+// Tagesbasiert, damit ein am Vortag offen gebliebener 'in'-Stempel nicht
+// dazu führt, dass der erste Klick eines neuen Tages als 'out' gewertet wird
+// (konsistent mit isStampedIn in GET /today).
+async function getLastStampToday(userId) {
+    const today = new Date().toISOString().split('T')[0];
     const [rows] = await db.query(
-        'SELECT * FROM timestamps_log WHERE user_id = ? ORDER BY stamp_time DESC LIMIT 1',
-        [userId]
+        'SELECT * FROM timestamps_log WHERE user_id = ? AND DATE(stamp_time) = ? ORDER BY stamp_time DESC LIMIT 1',
+        [userId, today]
     );
     return rows[0] || null;
 }
@@ -101,7 +106,7 @@ router.post('/', auth, async (req, res) => {
         const now = new Date();
         const source = req.body.source || 'web';
 
-        const last = await getLastStamp(userId);
+        const last = await getLastStampToday(userId);
         const type = (!last || last.type === 'out') ? 'in' : 'out';
 
         let coreCheck = { allowed: true, warning: null };
@@ -199,7 +204,7 @@ router.post('/nfc', async (req, res) => {
 
         const user = users[0];
         const now = new Date();
-        const last = await getLastStamp(user.id);
+        const last = await getLastStampToday(user.id);
         const type = (!last || last.type === 'out') ? 'in' : 'out';
 
         let coreCheck = { allowed: true, warning: null };
