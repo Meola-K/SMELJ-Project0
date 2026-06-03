@@ -1381,8 +1381,8 @@ body.modal-open { overflow: hidden; }
     white-space: nowrap;
 }
 
-.badge-stamp-in  { background: #dcfce7; color: #166534; }
-.badge-stamp-out { background: #fee2e2; color: #991b1b; }
+.badge-stamp-in  { background: var(--badge-approved-bg); color: var(--badge-approved-text); }
+.badge-stamp-out { background: var(--badge-denied-bg);   color: var(--badge-denied-text); }
 
 /* ── Sortierbare Spaltenköpfe ───────────────────────── */
 
