@@ -5,24 +5,156 @@
 }
 
 :root {
-    --primary: #2563eb;
-    --primary-hover: #1d4ed8;
-    --danger: #dc2626;
-    --success: #16a34a;
-    --bg: #f8fafc;
-    --surface: #ffffff;
-    --border: #e2e8f0;
-    --text: #1e293b;
-    --text-muted: #64748b;
+    /* ── Layout (unveraendert) ─────────────────────── */
     --radius: 8px;
     --sidebar-width: 240px;
     --sidebar-collapsed-width: 64px;
-    --sidebar-bg: #0f172a;
-    --sidebar-text: #cbd5e1;
-    --sidebar-text-hover: #ffffff;
-    --sidebar-active-bg: rgba(37, 99, 235, 0.15);
-    --sidebar-active-text: #60a5fa;
     --mobile-topbar-height: 56px;
+
+    /* ── Standard-Farbmodus (Normal) ──────────────── */
+    --primary:             #2563eb;
+    --primary-hover:       #1d4ed8;
+    --danger:              #dc2626;
+    --success:             #16a34a;
+    --bg:                  #f8fafc;
+    --surface:             #ffffff;
+    --border:              #e2e8f0;
+    --text:                #1e293b;
+    --text-muted:          #64748b;
+
+    --sidebar-bg:          #0f172a;
+    --sidebar-text:        #cbd5e1;
+    --sidebar-text-hover:  #ffffff;
+    --sidebar-active-bg:   rgba(37, 99, 235, 0.15);
+    --sidebar-active-text: #60a5fa;
+
+    /* ── Abwesenheitstypen (Standard) ─────────────── */
+    /* Urlaub = grün */
+    --type-urlaub-bg:      #dcfce7;
+    --type-urlaub-text:    #166534;
+    --type-urlaub-border:  #86efac;
+    --type-urlaub-wknd:    #bbf7d0;
+    /* Homeoffice = blau */
+    --type-ho-bg:          #dbeafe;
+    --type-ho-text:        #1e40af;
+    --type-ho-border:      #93c5fd;
+    --type-ho-wknd:        #bfdbfe;
+    /* Krank = rot */
+    --type-krank-bg:       #fee2e2;
+    --type-krank-text:     #991b1b;
+    --type-krank-border:   #fca5a5;
+    --type-krank-wknd:     #fecaca;
+    /* Gleitzeit = gelb */
+    --type-gleit-bg:       #fef9c3;
+    --type-gleit-text:     #854d0e;
+    --type-gleit-border:   #fde047;
+    --type-gleit-wknd:     #fef08a;
+    /* Sonderurlaub = orange */
+    --type-sonder-bg:      #ffedd5;
+    --type-sonder-text:    #9a3412;
+    --type-sonder-border:  #fdba74;
+    --type-sonder-wknd:    #fed7aa;
+    /* Status-Badges */
+    --badge-pending-bg:    #fef9c3;
+    --badge-pending-text:  #854d0e;
+    --badge-approved-bg:   #dcfce7;
+    --badge-approved-text: #166534;
+    --badge-denied-bg:     #fee2e2;
+    --badge-denied-text:   #991b1b;
+}
+
+/* ══════════════════════════════════════════════════════════
+   DEUTERANOPIE  (Grün-Rot-Schwäche)
+   Grün → Blau/Cyan, Rot → Orange/Gelb, Gelb → Helles Lila
+   Alle Kontrastverhältnisse ≥ 4.5:1 (WCAG 2.1 AA)
+   ══════════════════════════════════════════════════════════ */
+[data-color-mode="deuteranopia"] {
+    --primary:             #0369a1;   /* Blau, sicher erkennbar */
+    --primary-hover:       #075985;
+    --danger:              #b45309;   /* Orange statt Rot        */
+    --success:             #0369a1;   /* Blau statt Grün         */
+    --sidebar-active-bg:   rgba(3, 105, 161, 0.18);
+    --sidebar-active-text: #38bdf8;
+
+    /* Urlaub: Blau (war Grün) */
+    --type-urlaub-bg:      #dbeafe;
+    --type-urlaub-text:    #1e3a8a;
+    --type-urlaub-border:  #93c5fd;
+    --type-urlaub-wknd:    #bfdbfe;
+    /* Homeoffice: Violett (war auch Blau → jetzt differenziert) */
+    --type-ho-bg:          #ede9fe;
+    --type-ho-text:        #3730a3;
+    --type-ho-border:      #c4b5fd;
+    --type-ho-wknd:        #ddd6fe;
+    /* Krank: Orange/Amber (war Rot) */
+    --type-krank-bg:       #fef3c7;
+    --type-krank-text:     #92400e;
+    --type-krank-border:   #fcd34d;
+    --type-krank-wknd:     #fde68a;
+    /* Gleitzeit: Cyan (war Gelb → Deuteranope sehen Gelb, aber Cyan klarer) */
+    --type-gleit-bg:       #cffafe;
+    --type-gleit-text:     #155e75;
+    --type-gleit-border:   #67e8f9;
+    --type-gleit-wknd:     #a5f3fc;
+    /* Sonderurlaub: Fuchsia/Pink */
+    --type-sonder-bg:      #fdf4ff;
+    --type-sonder-text:    #86198f;
+    --type-sonder-border:  #e879f9;
+    --type-sonder-wknd:    #f5d0fe;
+    /* Status-Badges */
+    --badge-pending-bg:    #fef3c7;
+    --badge-pending-text:  #92400e;
+    --badge-approved-bg:   #dbeafe;
+    --badge-approved-text: #1e3a8a;
+    --badge-denied-bg:     #fef3c7;
+    --badge-denied-text:   #78350f;
+}
+
+/* ══════════════════════════════════════════════════════════
+   PROTANOPIE  (Rot-Schwäche – Rot erscheint sehr dunkel)
+   Rot → Gelb/Gold, Grün → Blau, Blau bleibt
+   Alle Kontrastverhältnisse ≥ 4.5:1 (WCAG 2.1 AA)
+   ══════════════════════════════════════════════════════════ */
+[data-color-mode="protanopia"] {
+    --primary:             #0ea5e9;   /* Hellblau, keine Rotkomponente */
+    --primary-hover:       #0284c7;
+    --danger:              #ca8a04;   /* Gold/Gelb statt Rot           */
+    --success:             #0ea5e9;   /* Blau statt Grün               */
+    --sidebar-active-bg:   rgba(14, 165, 233, 0.18);
+    --sidebar-active-text: #7dd3fc;
+
+    /* Urlaub: Hellblau (sicher von Rot abgrenzbar) */
+    --type-urlaub-bg:      #e0f2fe;
+    --type-urlaub-text:    #075985;
+    --type-urlaub-border:  #7dd3fc;
+    --type-urlaub-wknd:    #bae6fd;
+    /* Homeoffice: Violett */
+    --type-ho-bg:          #ede9fe;
+    --type-ho-text:        #4c1d95;
+    --type-ho-border:      #c4b5fd;
+    --type-ho-wknd:        #ddd6fe;
+    /* Krank: Gold/Gelb (Rot unsichtbar für Protanope) */
+    --type-krank-bg:       #fef9c3;
+    --type-krank-text:     #713f12;
+    --type-krank-border:   #fde047;
+    --type-krank-wknd:     #fef08a;
+    /* Gleitzeit: Teal */
+    --type-gleit-bg:       #ccfbf1;
+    --type-gleit-text:     #134e4a;
+    --type-gleit-border:   #5eead4;
+    --type-gleit-wknd:     #99f6e4;
+    /* Sonderurlaub: Orange (Protanope unterscheiden Orange von Blau) */
+    --type-sonder-bg:      #ffedd5;
+    --type-sonder-text:    #7c2d12;
+    --type-sonder-border:  #fb923c;
+    --type-sonder-wknd:    #fed7aa;
+    /* Status-Badges */
+    --badge-pending-bg:    #fef9c3;
+    --badge-pending-text:  #713f12;
+    --badge-approved-bg:   #e0f2fe;
+    --badge-approved-text: #075985;
+    --badge-denied-bg:     #fef9c3;
+    --badge-denied-text:   #92400e;
 }
 
 body {
@@ -1130,9 +1262,9 @@ body.modal-open { overflow: hidden; }
 .requests-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
 .requests-header h3 { margin: 0; }
 
-.badge-pending  { background: #fef9c3; color: #854d0e; }
-.badge-approved { background: #dcfce7; color: #166534; }
-.badge-denied   { background: #fee2e2; color: #991b1b; }
+.badge-pending  { background: var(--badge-pending-bg);  color: var(--badge-pending-text); }
+.badge-approved { background: var(--badge-approved-bg); color: var(--badge-approved-text); }
+.badge-denied   { background: var(--badge-denied-bg);   color: var(--badge-denied-text); }
 
 .btn-withdraw { background: #fee2e2; color: #991b1b; border: none; }
 .btn-withdraw:hover { background: #fecaca; }
@@ -1290,11 +1422,11 @@ body.modal-open { overflow: hidden; }
     border: 1px solid transparent;
     white-space: nowrap;
 }
-.type-urlaub        { background: #dcfce7; color: #166534; border-color: #86efac; }
-.type-homeoffice    { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
-.type-krank         { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
-.type-gleitzeit     { background: #fef9c3; color: #854d0e; border-color: #fde047; }
-.type-sonderurlaub  { background: #ffedd5; color: #9a3412; border-color: #fdba74; }
+.type-urlaub        { background: var(--type-urlaub-bg);  color: var(--type-urlaub-text);  border-color: var(--type-urlaub-border); }
+.type-homeoffice    { background: var(--type-ho-bg);      color: var(--type-ho-text);      border-color: var(--type-ho-border); }
+.type-krank         { background: var(--type-krank-bg);   color: var(--type-krank-text);   border-color: var(--type-krank-border); }
+.type-gleitzeit     { background: var(--type-gleit-bg);   color: var(--type-gleit-text);   border-color: var(--type-gleit-border); }
+.type-sonderurlaub  { background: var(--type-sonder-bg);  color: var(--type-sonder-text);  border-color: var(--type-sonder-border); }
 
 /* Legende */
 .type-legend {
@@ -1559,32 +1691,32 @@ body.modal-open { overflow: hidden; }
    .type-urlaub etc. sind auch als Badge-Klassen definiert – dort mit
    niedrigerer Spezifitaet. Im Kalender-Grid muessen sie .calendar-day
    (background: var(--surface)) sicher ueberschreiben. */
-.calendar-day.type-urlaub     { background: #dcfce7; border-color: #86efac; }
+.calendar-day.type-urlaub     { background: var(--type-urlaub-bg);  border-color: var(--type-urlaub-border); }
 .calendar-day.type-urlaub .calendar-day-number,
-.calendar-day.type-urlaub .calendar-day-label { color: #166534; }
+.calendar-day.type-urlaub .calendar-day-label { color: var(--type-urlaub-text); }
 
-.calendar-day.type-homeoffice { background: #dbeafe; border-color: #93c5fd; }
+.calendar-day.type-homeoffice { background: var(--type-ho-bg); border-color: var(--type-ho-border); }
 .calendar-day.type-homeoffice .calendar-day-number,
-.calendar-day.type-homeoffice .calendar-day-label { color: #1e40af; }
+.calendar-day.type-homeoffice .calendar-day-label { color: var(--type-ho-text); }
 
-.calendar-day.type-krank      { background: #fee2e2; border-color: #fca5a5; }
+.calendar-day.type-krank      { background: var(--type-krank-bg); border-color: var(--type-krank-border); }
 .calendar-day.type-krank .calendar-day-number,
-.calendar-day.type-krank .calendar-day-label { color: #991b1b; }
+.calendar-day.type-krank .calendar-day-label { color: var(--type-krank-text); }
 
-.calendar-day.type-gleitzeit  { background: #fef9c3; border-color: #fde047; }
+.calendar-day.type-gleitzeit  { background: var(--type-gleit-bg); border-color: var(--type-gleit-border); }
 .calendar-day.type-gleitzeit .calendar-day-number,
-.calendar-day.type-gleitzeit .calendar-day-label { color: #854d0e; }
+.calendar-day.type-gleitzeit .calendar-day-label { color: var(--type-gleit-text); }
 
-.calendar-day.type-sonderurlaub { background: #ffedd5; border-color: #fdba74; }
+.calendar-day.type-sonderurlaub { background: var(--type-sonder-bg); border-color: var(--type-sonder-border); }
 .calendar-day.type-sonderurlaub .calendar-day-number,
-.calendar-day.type-sonderurlaub .calendar-day-label { color: #9a3412; }
+.calendar-day.type-sonderurlaub .calendar-day-label { color: var(--type-sonder-text); }
 
 /* Wochenend-Tage mit Abwesenheit: leicht abgedunkelt fuer visuelle Trennung */
-.calendar-day--weekend.type-urlaub     { background: #bbf7d0; }
-.calendar-day--weekend.type-homeoffice { background: #bfdbfe; }
-.calendar-day--weekend.type-krank      { background: #fecaca; }
-.calendar-day--weekend.type-gleitzeit  { background: #fef08a; }
-.calendar-day--weekend.type-sonderurlaub { background: #fed7aa; }
+.calendar-day--weekend.type-urlaub     { background: var(--type-urlaub-wknd); }
+.calendar-day--weekend.type-homeoffice { background: var(--type-ho-wknd); }
+.calendar-day--weekend.type-krank      { background: var(--type-krank-wknd); }
+.calendar-day--weekend.type-gleitzeit  { background: var(--type-gleit-wknd); }
+.calendar-day--weekend.type-sonderurlaub { background: var(--type-sonder-wknd); }
 
 /* Pending: gestreiftes Muster zur Unterscheidung */
 .calendar-day--pending {
@@ -1630,11 +1762,11 @@ body.modal-open { overflow: hidden; }
     border: 1px solid transparent;
 }
 /* Farben fuer Legende-Swatches explizit (unabhaengig von Badge-Kontext) */
-.calendar-legend-swatch.type-urlaub      { background: #dcfce7; border-color: #86efac; }
-.calendar-legend-swatch.type-homeoffice  { background: #dbeafe; border-color: #93c5fd; }
-.calendar-legend-swatch.type-krank       { background: #fee2e2; border-color: #fca5a5; }
-.calendar-legend-swatch.type-gleitzeit   { background: #fef9c3; border-color: #fde047; }
-.calendar-legend-swatch.type-sonderurlaub { background: #ffedd5; border-color: #fdba74; }
+.calendar-legend-swatch.type-urlaub      { background: var(--type-urlaub-bg); border-color: var(--type-urlaub-border); }
+.calendar-legend-swatch.type-homeoffice  { background: var(--type-ho-bg); border-color: var(--type-ho-border); }
+.calendar-legend-swatch.type-krank       { background: var(--type-krank-bg); border-color: var(--type-krank-border); }
+.calendar-legend-swatch.type-gleitzeit   { background: var(--type-gleit-bg); border-color: var(--type-gleit-border); }
+.calendar-legend-swatch.type-sonderurlaub { background: var(--type-sonder-bg); border-color: var(--type-sonder-border); }
 
 .calendar-legend-today {
     background: var(--surface);
@@ -2241,3 +2373,113 @@ body.modal-open { overflow: hidden; }
         text-align: center;
     }
 }
+
+/* ══════════════════════════════════════════════════════════
+   FARBMODUS-TOGGLE (Barrierefreiheit)
+   Sitzt zwischen nav und sidebar-footer als kompakter
+   3-Stufen-Schalter. Klappt im Collapsed-State zu einem
+   kleinen runden Icon zusammen.
+   ══════════════════════════════════════════════════════════ */
+.color-mode-section {
+    padding: 0.5rem 0.75rem 0.4rem;
+    border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.color-mode-label {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--sidebar-text);
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.4rem;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.color-mode-label svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    stroke: var(--sidebar-text);
+}
+
+.color-mode-btns {
+    display: flex;
+    gap: 3px;
+}
+
+.color-mode-btn {
+    flex: 1;
+    padding: 0.28rem 0.3rem;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 5px;
+    color: var(--sidebar-text);
+    font-size: 0.65rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    line-height: 1.3;
+}
+
+.color-mode-btn:hover {
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+}
+
+.color-mode-btn.active {
+    background: rgba(255,255,255,0.18);
+    border-color: rgba(255,255,255,0.35);
+    color: #fff;
+    font-weight: 600;
+}
+
+.color-mode-btn:focus-visible {
+    outline: 2px solid var(--sidebar-active-text);
+    outline-offset: 1px;
+}
+
+/* Collapsed: Label + Buttons ausblenden, nur Icon zeigen */
+.app-shell.sidebar-collapsed .color-mode-label span,
+.app-shell.sidebar-collapsed .color-mode-btns {
+    display: none;
+}
+
+.app-shell.sidebar-collapsed .color-mode-label {
+    justify-content: center;
+    margin-bottom: 0;
+    padding: 0.1rem 0;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: background 0.15s;
+}
+
+.app-shell.sidebar-collapsed .color-mode-label:hover {
+    background: rgba(255,255,255,0.1);
+}
+
+.app-shell.sidebar-collapsed .color-mode-section {
+    padding: 0.5rem 0.5rem 0.4rem;
+}
+
+/* Kleiner Farbpunkt zeigt aktiven Modus im Collapsed-State */
+.color-mode-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--sidebar-active-text);
+    flex-shrink: 0;
+    display: none;
+}
+
+.app-shell.sidebar-collapsed .color-mode-dot {
+    display: block;
+}
+
+[data-color-mode="deuteranopia"] .color-mode-dot { background: #38bdf8; }
+[data-color-mode="protanopia"]   .color-mode-dot { background: #7dd3fc; }

@@ -126,7 +126,56 @@ sidebarNav.addEventListener('click', (e) => {
 
 // ── SCRUM-325: Sidebar einklappen (Desktop) + Persistenz ────
 const btnSidebarCollapse = document.getElementById('btn-sidebar-collapse');
-const SIDEBAR_STATE_KEY = 'zs_sidebar';
+const SIDEBAR_STATE_KEY  = 'zs_sidebar';
+const COLOR_MODE_KEY     = 'zs_color_mode';
+
+// ── Farbmodus-System (Barrierefreiheit) ─────────────────────
+// Der Modus wird als data-color-mode Attribut auf <html> gesetzt.
+// CSS-Selektoren wie [data-color-mode="deuteranopia"] überschreiben
+// dann alle Farbvariablen zentral – kein JS-Eingriff zur Laufzeit.
+const VALID_MODES = ['normal', 'deuteranopia', 'protanopia'];
+
+function applyColorMode(mode) {
+    if (!VALID_MODES.includes(mode)) mode = 'normal';
+
+    if (mode === 'normal') {
+        document.documentElement.removeAttribute('data-color-mode');
+    } else {
+        document.documentElement.setAttribute('data-color-mode', mode);
+    }
+
+    // Buttons aktualisieren
+    document.querySelectorAll('.color-mode-btn').forEach(btn => {
+        const isActive = btn.dataset.mode === mode;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-pressed', String(isActive));
+    });
+
+    // Persistenz
+    try { localStorage.setItem(COLOR_MODE_KEY, mode); } catch (e) {}
+}
+
+// Gespeicherten Modus sofort beim Laden anwenden (vor dem ersten Render)
+(function initColorMode() {
+    let saved = 'normal';
+    try { saved = localStorage.getItem(COLOR_MODE_KEY) || 'normal'; } catch (e) {}
+    applyColorMode(saved);
+})();
+
+// Button-Clicks registrieren
+document.querySelectorAll('.color-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => applyColorMode(btn.dataset.mode));
+});
+
+// Im Collapsed-State: Klick auf das Icon öffnet einen Mini-Cycle
+document.getElementById('color-mode-label-collapsed')?.addEventListener('click', () => {
+    // Nur im collapsed State reagieren
+    if (!document.querySelector('.app-shell')?.classList.contains('sidebar-collapsed')) return;
+    let cur = 'normal';
+    try { cur = localStorage.getItem(COLOR_MODE_KEY) || 'normal'; } catch (e) {}
+    const idx = VALID_MODES.indexOf(cur);
+    applyColorMode(VALID_MODES[(idx + 1) % VALID_MODES.length]);
+});
 
 // Im eingeklappten Zustand das Label als Tooltip am Icon zeigen
 function setSidebarLinkTitles(collapsed) {

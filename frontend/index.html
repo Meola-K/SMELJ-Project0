@@ -118,6 +118,20 @@
                 </a>
             </nav>
 
+            <!-- Farbmodus-Umschalter (Barrierefreiheit) -->
+            <div class="color-mode-section" role="group" aria-label="Farbmodus für Farbschwächen">
+                <div class="color-mode-label" id="color-mode-label-collapsed" title="Farbmodus wechseln">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                    <span>Farbmodus</span>
+                    <span class="color-mode-dot" aria-hidden="true"></span>
+                </div>
+                <div class="color-mode-btns">
+                    <button class="color-mode-btn active" data-mode="normal"       aria-pressed="true"  title="Standardfarben">Normal</button>
+                    <button class="color-mode-btn"        data-mode="deuteranopia" aria-pressed="false" title="Grün-Rot-Schwäche (Deuteranopie)">Deut.</button>
+                    <button class="color-mode-btn"        data-mode="protanopia"   aria-pressed="false" title="Rot-Schwäche (Protanopie)">Prot.</button>
+                </div>
+            </div>
+
             <div class="sidebar-footer">
                 <div class="sidebar-user">
                     <div class="sidebar-user-avatar" id="sidebar-avatar" aria-hidden="true">?</div>
