@@ -592,9 +592,9 @@
                                 </colgroup>
                                 <thead>
                                     <tr>
-                                        <th>Mitarbeiter</th>
-                                        <th>Typ</th>
-                                        <th>Zeitraum</th>
+                                        <th data-sort-key="user_name">Mitarbeiter</th>
+                                        <th data-sort-key="type">Typ</th>
+                                        <th data-sort-key="date_from">Zeitraum</th>
                                         <th class="col-hide-sm">Notiz</th>
                                         <th class="col-actions">Aktionen</th>
                                     </tr>
@@ -629,7 +629,14 @@
                                         <option value="sonderurlaub">Sonderurlaub</option>
                                     </select>
                                 </div>
-                                <button class="btn btn-sm" id="btn-reset-filter">Filter zurücksetzen</button>
+                                <div class="form-group filter-search">
+                                    <label for="filter-req-text">Suche</label>
+                                    <input type="search" id="filter-req-text" placeholder="Mitarbeiter oder Bearbeiter…" autocomplete="off">
+                                </div>
+                                <button class="btn btn-sm btn-filter-reset" id="btn-reset-filter">✕ Zurücksetzen</button>
+                            </div>
+                            <div class="filter-count-row">
+                                <span class="filter-count-badge hidden" id="all-req-count-badge">0 Treffer</span>
                             </div>
                             <!-- Farb-Legende für Antragstypen -->
                             <div class="type-legend" aria-label="Legende Antragstypen">
@@ -654,12 +661,12 @@
                                 </colgroup>
                                 <thead>
                                     <tr>
-                                        <th>Mitarbeiter</th>
-                                        <th>Typ</th>
-                                        <th>Zeitraum</th>
-                                        <th>Status</th>
-                                        <th class="col-hide-md">Bearbeiter</th>
-                                        <th class="col-hide-sm">Eingereicht</th>
+                                        <th data-sort-key="user_name">Mitarbeiter</th>
+                                        <th data-sort-key="type">Typ</th>
+                                        <th data-sort-key="date_from">Zeitraum</th>
+                                        <th data-sort-key="status">Status</th>
+                                        <th class="col-hide-md" data-sort-key="reviewer_name">Bearbeiter</th>
+                                        <th class="col-hide-sm" data-sort-key="created_at">Eingereicht</th>
                                     </tr>
                                 </thead>
                                 <tbody id="all-requests-tbody"></tbody>
@@ -704,6 +711,42 @@
                         <h1>Benutzerverwaltung</h1>
                         <button id="btn-open-create-user" class="btn btn-primary">+ Nutzer Anlegen</button>
                     </div>
+                    <!-- Filterleiste Benutzer -->
+                    <div class="table-filter-bar card" id="users-filter-bar">
+                        <div class="filter-bar-row">
+                            <div class="form-group">
+                                <label for="users-filter-group">Gruppe/Abteilung</label>
+                                <select id="users-filter-group">
+                                    <option value="">Alle Gruppen</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="users-filter-role">Rolle</label>
+                                <select id="users-filter-role">
+                                    <option value="">Alle Rollen</option>
+                                    <option value="admin">Admin</option>
+                                    <option value="vorgesetzter">Vorgesetzter</option>
+                                    <option value="arbeiter">Mitarbeiter</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="users-filter-status">Status</label>
+                                <select id="users-filter-status">
+                                    <option value="">Alle</option>
+                                    <option value="aktiv">Aktiv</option>
+                                    <option value="inaktiv">Inaktiv</option>
+                                </select>
+                            </div>
+                            <div class="form-group filter-search">
+                                <label for="users-filter-text">Suche</label>
+                                <input type="search" id="users-filter-text" placeholder="Name oder E-Mail…" autocomplete="off">
+                            </div>
+                            <button class="btn btn-sm btn-filter-reset" id="btn-reset-users-filter" title="Filter zurücksetzen">✕ Zurücksetzen</button>
+                        </div>
+                        <div class="filter-count-row">
+                            <span class="filter-count-badge hidden" id="users-count-badge">0 Treffer</span>
+                        </div>
+                    </div>
                     <div id="users-table-wrap" class="admin-table-wrap">
                         <table class="table" id="users-table">
                             <colgroup>
@@ -717,12 +760,12 @@
                             </colgroup>
                             <thead>
                                 <tr>
-                                    <th>Name</th>
-                                    <th class="col-hide-sm">E-Mail</th>
-                                    <th>Rolle</th>
-                                    <th class="col-hide-md">Gruppe</th>
-                                    <th class="col-hide-md">Vorgesetzter</th>
-                                    <th>Status</th>
+                                    <th data-sort-key="last_name">Name</th>
+                                    <th class="col-hide-sm" data-sort-key="email">E-Mail</th>
+                                    <th data-sort-key="role">Rolle</th>
+                                    <th class="col-hide-md" data-sort-key="group_name">Gruppe</th>
+                                    <th class="col-hide-md" data-sort-key="supervisor_name">Vorgesetzter</th>
+                                    <th data-sort-key="active">Status</th>
                                     <th class="col-actions">Aktionen</th>
                                 </tr>
                             </thead>
@@ -739,6 +782,35 @@
                         <h1>Stempeluhren</h1>
                         <button id="btn-open-create-device" class="btn btn-primary">+ Gerät registrieren</button>
                     </div>
+                    <!-- Filterleiste Geräte -->
+                    <div class="table-filter-bar card" id="devices-filter-bar">
+                        <div class="filter-bar-row">
+                            <div class="form-group">
+                                <label for="devices-filter-status">Status</label>
+                                <select id="devices-filter-status">
+                                    <option value="">Alle</option>
+                                    <option value="online">Online</option>
+                                    <option value="offline">Offline</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="devices-filter-mode">Modus</label>
+                                <select id="devices-filter-mode">
+                                    <option value="">Alle Modi</option>
+                                    <option value="stamp">Stempel-Modus</option>
+                                    <option value="frontdesk">Frontdesk-Modus</option>
+                                </select>
+                            </div>
+                            <div class="form-group filter-search">
+                                <label for="devices-filter-text">Suche</label>
+                                <input type="search" id="devices-filter-text" placeholder="Name oder Standort…" autocomplete="off">
+                            </div>
+                            <button class="btn btn-sm btn-filter-reset" id="btn-reset-devices-filter" title="Filter zurücksetzen">✕ Zurücksetzen</button>
+                        </div>
+                        <div class="filter-count-row">
+                            <span class="filter-count-badge hidden" id="devices-count-badge">0 Treffer</span>
+                        </div>
+                    </div>
                     <div class="card admin-table-wrap">
                         <div id="devices-empty" class="text-muted hidden">Keine Geräte registriert.</div>
                         <table class="table" id="devices-table">
@@ -753,12 +825,12 @@
                             </colgroup>
                             <thead>
                                 <tr>
-                                    <th class="col-hide-sm">ID</th>
-                                    <th>Name</th>
-                                    <th class="col-hide-md">Standort</th>
-                                    <th>Modus</th>
+                                    <th class="col-hide-sm" data-sort-key="id">ID</th>
+                                    <th data-sort-key="name">Name</th>
+                                    <th class="col-hide-md" data-sort-key="location">Standort</th>
+                                    <th data-sort-key="mode">Modus</th>
                                     <th>Status</th>
-                                    <th class="col-hide-sm">Zuletzt gesehen</th>
+                                    <th class="col-hide-sm" data-sort-key="last_seen">Zuletzt gesehen</th>
                                     <th class="col-actions">Aktionen</th>
                                 </tr>
                             </thead>

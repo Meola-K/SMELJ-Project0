@@ -1,6 +1,7 @@
 import { apiFetch, setToken, clearToken, getToken } from './api.js';
 import { registerRoute, onNavigate, navigateTo, startRouter, setCurrentUserProvider } from './router.js';
 import { showToast, toast, openModal, closeModal as utilsCloseModal, initModal, initModalSystem, confirmModal } from './utils.js';
+import { makeSortFn, setSortHeader, bindSortHeaders, filterByText, filterByValue, updateCountBadge } from './tableHelpers.js';
 
 // ── DOM References ──────────────────────────────────────────
 const pageLogin = document.getElementById('page-login');
@@ -827,19 +828,101 @@ function renderHistory(stamps) {
 }
 
 // ── Users (Admin) ───────────────────────────────────────────
+
+// Sort-/Filter-State für Benutzertabelle
+const usersSortState = { key: 'last_name', dir: 'asc' };
+const usersFilterState = { group: '', role: '', status: '', text: '' };
+
 async function loadUsers() {
     try {
         allUsers = await apiFetch('/admin/users');
-        renderUsersTable();
+        initUsersFilterBar();
+        applyUsersFilter();
     } catch (err) {
         console.error('Fehler beim Laden der Benutzer:', err);
     }
 }
 
-function renderUsersTable() {
+function initUsersFilterBar() {
+    // Gruppen-Dropdown befüllen (einmalig, danach nur aktualisieren)
+    const groupSel = document.getElementById('users-filter-group');
+    if (groupSel && groupSel.options.length <= 1) {
+        const groups = [...new Map(allUsers.filter(u => u.group_name).map(u => [u.group_id, u.group_name])).entries()];
+        groups.sort((a, b) => a[1].localeCompare(b[1]));
+        groups.forEach(([id, name]) => {
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = name;
+            groupSel.appendChild(opt);
+        });
+    }
+
+    // Filter-Event-Listener (nur einmalig binden)
+    const bar = document.getElementById('users-filter-bar');
+    if (bar && !bar.dataset.bound) {
+        bar.dataset.bound = '1';
+        document.getElementById('users-filter-group')?.addEventListener('change', applyUsersFilter);
+        document.getElementById('users-filter-role')?.addEventListener('change', applyUsersFilter);
+        document.getElementById('users-filter-status')?.addEventListener('change', applyUsersFilter);
+        document.getElementById('users-filter-text')?.addEventListener('input', applyUsersFilter);
+        document.getElementById('btn-reset-users-filter')?.addEventListener('click', () => {
+            const g = document.getElementById('users-filter-group');
+            const r = document.getElementById('users-filter-role');
+            const s = document.getElementById('users-filter-status');
+            const t = document.getElementById('users-filter-text');
+            if (g) g.value = '';
+            if (r) r.value = '';
+            if (s) s.value = '';
+            if (t) t.value = '';
+            applyUsersFilter();
+        });
+    }
+
+    // Sort-Header initialisieren
+    const thead = document.querySelector('#users-table thead');
+    if (thead && !thead.dataset.sortBound) {
+        thead.dataset.sortBound = '1';
+        bindSortHeaders(thead, usersSortState, () => applyUsersFilter());
+        // Initialzustand setzen
+        const th = thead.querySelector(`th[data-sort-key="${usersSortState.key}"]`);
+        if (th) setSortHeader(th, usersSortState.dir);
+    }
+}
+
+function applyUsersFilter() {
+    const groupSel  = document.getElementById('users-filter-group');
+    const roleSel   = document.getElementById('users-filter-role');
+    const statusSel = document.getElementById('users-filter-status');
+    const textInp   = document.getElementById('users-filter-text');
+
+    usersFilterState.group  = groupSel?.value  || '';
+    usersFilterState.role   = roleSel?.value   || '';
+    usersFilterState.status = statusSel?.value || '';
+    usersFilterState.text   = textInp?.value   || '';
+
+    let filtered = [...allUsers];
+    if (usersFilterState.group)  filtered = filtered.filter(u => String(u.group_id) === usersFilterState.group);
+    if (usersFilterState.role)   filtered = filterByValue(filtered, 'role', usersFilterState.role);
+    if (usersFilterState.status !== '') {
+        const activeVal = usersFilterState.status === 'aktiv';
+        filtered = filtered.filter(u => Boolean(u.active) === activeVal);
+    }
+    if (usersFilterState.text) {
+        filtered = filterByText(filtered, usersFilterState.text, ['first_name', 'last_name', 'email']);
+    }
+
+    // Sortierung
+    filtered.sort(makeSortFn(usersSortState.key, usersSortState.dir));
+
+    renderUsersTable(filtered);
+    updateCountBadge(document.getElementById('users-count-badge'), filtered.length);
+}
+
+function renderUsersTable(users) {
+    const data = users ?? allUsers;
     const roleLabels = { admin: 'Admin', vorgesetzter: 'Vorgesetzter', arbeiter: 'Mitarbeiter' };
     const uid = currentUser.id;
-    usersTbody.innerHTML = allUsers
+    usersTbody.innerHTML = data
         .map(
             (u) => `
         <tr>
@@ -1879,14 +1962,48 @@ document.querySelectorAll('.req-tab').forEach(tab => {
 // Filter
 document.getElementById('filter-status')?.addEventListener('change', applyAllFilter);
 document.getElementById('filter-type')?.addEventListener('change', applyAllFilter);
+document.getElementById('filter-req-text')?.addEventListener('input', applyAllFilter);
 document.getElementById('btn-reset-filter')?.addEventListener('click', () => {
     document.getElementById('filter-status').value = '';
     document.getElementById('filter-type').value = '';
+    const textEl = document.getElementById('filter-req-text');
+    if (textEl) textEl.value = '';
     applyAllFilter();
 });
 
+// Sort-State für Anträge-Tabelle
+const allReqSortState = { key: 'created_at', dir: 'desc' };
+let allReqSortBound = false;
+
+function initAllReqSortHeaders() {
+    if (allReqSortBound) return;
+    const thead = document.querySelector('#all-requests-table thead');
+    if (!thead) return;
+    allReqSortBound = true;
+    bindSortHeaders(thead, allReqSortState, () => applyAllFilter());
+    const th = thead.querySelector(`th[data-sort-key="${allReqSortState.key}"]`);
+    if (th) setSortHeader(th, allReqSortState.dir);
+}
+
+// Sort-State für Pending-Tabelle
+const pendingSortState = { key: 'created_at', dir: 'asc' };
+let pendingSortBound = false;
+
+function initPendingSortHeaders() {
+    if (pendingSortBound) return;
+    const thead = document.querySelector('#pending-table thead');
+    if (!thead) return;
+    pendingSortBound = true;
+    bindSortHeaders(thead, pendingSortState, () => {
+        const sorted = [...pendingRequestsData].sort(makeSortFn(pendingSortState.key, pendingSortState.dir));
+        renderPendingRequests(sorted, true);
+    });
+}
+
 async function loadRequestsOverview() {
     await Promise.all([loadPendingRequests(), loadAllRequests(), loadPendingCorrections()]);
+    initAllReqSortHeaders();
+    initPendingSortHeaders();
 }
 
 async function loadPendingRequests() {
@@ -1907,18 +2024,20 @@ async function loadAllRequests() {
     }
 }
 
-function renderPendingRequests(requests) {
+function renderPendingRequests(requests, skipBadge) {
     const tbody = document.getElementById('pending-tbody');
     const emptyEl = document.getElementById('pending-empty');
     const table = document.getElementById('pending-table');
     const badge = document.getElementById('pending-count-badge');
 
-    // Badge aktualisieren
-    if (requests.length > 0) {
-        badge.textContent = requests.length;
-        badge.classList.remove('hidden');
-    } else {
-        badge.classList.add('hidden');
+    // Badge aktualisieren (nur wenn nicht vom Sort-Re-Render aufgerufen)
+    if (!skipBadge) {
+        if (requests.length > 0) {
+            badge.textContent = requests.length;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
     }
 
     if (requests.length === 0) {
@@ -1951,12 +2070,18 @@ function renderPendingRequests(requests) {
 function applyAllFilter() {
     const statusVal = document.getElementById('filter-status')?.value || '';
     const typeVal   = document.getElementById('filter-type')?.value   || '';
+    const textVal   = document.getElementById('filter-req-text')?.value || '';
 
-    let filtered = allRequestsData;
+    let filtered = [...allRequestsData];
     if (statusVal) filtered = filtered.filter(r => r.status === statusVal);
     if (typeVal)   filtered = filtered.filter(r => r.type === typeVal);
+    if (textVal)   filtered = filterByText(filtered, textVal, ['user_name', 'reviewer_name']);
+
+    // Sortierung
+    filtered.sort(makeSortFn(allReqSortState.key, allReqSortState.dir));
 
     renderAllRequests(filtered);
+    updateCountBadge(document.getElementById('all-req-count-badge'), filtered.length);
 }
 
 function renderAllRequests(requests) {
@@ -2092,13 +2217,70 @@ window._reviewCorrection = async function(id, status) {
 let devicesRefreshTimer = null;
 let allDevicesData = [];
 
+// Sort-/Filter-State für Gerätetabelle
+const devicesSortState = { key: 'name', dir: 'asc' };
+const devicesFilterState = { status: '', mode: '', text: '' };
+let devicesSortBound = false;
+
 async function loadDevicesPage() {
     await Promise.all([loadDevices(), loadUsersForDevices()]);
     populateDeviceDropdowns();
     renderNfcTable();
     setupNfcListeners();
+    initDevicesSortAndFilter();
     clearInterval(devicesRefreshTimer);
     devicesRefreshTimer = setInterval(loadDevices, 15000);
+}
+
+function initDevicesSortAndFilter() {
+    // Sort-Header
+    if (!devicesSortBound) {
+        const thead = document.querySelector('#devices-table thead');
+        if (thead) {
+            devicesSortBound = true;
+            bindSortHeaders(thead, devicesSortState, () => applyDevicesFilter());
+            const th = thead.querySelector(`th[data-sort-key="${devicesSortState.key}"]`);
+            if (th) setSortHeader(th, devicesSortState.dir);
+        }
+    }
+    // Filter-Listener
+    document.getElementById('devices-filter-status')?.addEventListener('change', applyDevicesFilter);
+    document.getElementById('devices-filter-mode')?.addEventListener('change', applyDevicesFilter);
+    document.getElementById('devices-filter-text')?.addEventListener('input', applyDevicesFilter);
+    document.getElementById('btn-reset-devices-filter')?.addEventListener('click', () => {
+        const s = document.getElementById('devices-filter-status');
+        const m = document.getElementById('devices-filter-mode');
+        const t = document.getElementById('devices-filter-text');
+        if (s) s.value = '';
+        if (m) m.value = '';
+        if (t) t.value = '';
+        applyDevicesFilter();
+    });
+}
+
+function applyDevicesFilter() {
+    devicesFilterState.status = document.getElementById('devices-filter-status')?.value || '';
+    devicesFilterState.mode   = document.getElementById('devices-filter-mode')?.value   || '';
+    devicesFilterState.text   = document.getElementById('devices-filter-text')?.value   || '';
+
+    let filtered = [...allDevicesData];
+
+    if (devicesFilterState.status !== '') {
+        const isOnline = devicesFilterState.status === 'online';
+        filtered = filtered.filter(d => isDeviceOnline(d.last_seen) === isOnline);
+    }
+    if (devicesFilterState.mode) {
+        filtered = filterByValue(filtered, 'mode', devicesFilterState.mode);
+    }
+    if (devicesFilterState.text) {
+        filtered = filterByText(filtered, devicesFilterState.text, ['name', 'location', 'id']);
+    }
+
+    // Sortierung
+    filtered.sort(makeSortFn(devicesSortState.key, devicesSortState.dir));
+
+    renderDevicesTable(filtered);
+    updateCountBadge(document.getElementById('devices-count-badge'), filtered.length);
 }
 
 async function loadUsersForDevices() {
@@ -2110,7 +2292,7 @@ async function loadUsersForDevices() {
 async function loadDevices() {
     try {
         allDevicesData = await apiFetch('/admin/devices');
-        renderDevicesTable(allDevicesData);
+        applyDevicesFilter();
     } catch (err) {
         console.error('Fehler beim Laden der Geräte:', err);
     }

@@ -2123,3 +2123,121 @@ body.modal-open { overflow: hidden; }
         gap: 0.5rem;
     }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   Filterleiste für Admin-Tabellen (US-058-Ticket: Sortierung &
+   Filterung von Benutzer-, Anträge- und Geräte-Tabellen)
+   ══════════════════════════════════════════════════════════════ */
+
+.table-filter-bar {
+    margin-bottom: 1rem;
+    padding: 0.85rem 1rem 0.6rem;
+}
+
+.filter-bar-row {
+    display: flex;
+    gap: 0.85rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.filter-bar-row .form-group {
+    margin: 0;
+    min-width: 130px;
+    flex: 1 1 130px;
+}
+
+.filter-bar-row .form-group.filter-search {
+    min-width: 180px;
+    flex: 2 1 180px;
+}
+
+.filter-bar-row .form-group label {
+    font-size: 0.78rem;
+    margin-bottom: 0.25rem;
+    display: block;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.filter-bar-row .form-group input[type="search"] {
+    width: 100%;
+    padding: 0.38rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+    background: var(--bg);
+    color: var(--text);
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.filter-bar-row .form-group input[type="search"]:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+.btn-filter-reset {
+    align-self: flex-end;
+    white-space: nowrap;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 0.38rem 0.75rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    border-radius: var(--radius);
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+}
+
+.btn-filter-reset:hover {
+    background: var(--bg-hover, #f3f4f6);
+    color: var(--text);
+    border-color: var(--text-muted);
+}
+
+.filter-count-row {
+    margin-top: 0.45rem;
+    min-height: 1.4rem;
+}
+
+.filter-count-badge {
+    display: inline-block;
+    background: color-mix(in srgb, var(--primary) 12%, transparent);
+    color: var(--primary);
+    border: 1px solid color-mix(in srgb, var(--primary) 25%, transparent);
+    border-radius: 999px;
+    padding: 0.1rem 0.7rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    transition: opacity 0.2s;
+}
+
+.filter-count-badge.hidden {
+    display: none;
+}
+
+/* th-sort-none: Pfeil sichtbar aber gedimmt (neutral, kein Sort aktiv) */
+.th-sortable.th-sort-none .sort-arrow {
+    opacity: 0.25;
+    transform: none;
+}
+
+/* Responsive Filterleiste */
+@media (max-width: 640px) {
+    .filter-bar-row .form-group {
+        min-width: 100%;
+        flex: 1 1 100%;
+    }
+
+    .filter-bar-row .form-group.filter-search {
+        min-width: 100%;
+        flex: 1 1 100%;
+    }
+
+    .btn-filter-reset {
+        width: 100%;
+        text-align: center;
+    }
+}
