@@ -323,10 +323,17 @@ function setupSocket() {
     if (socket) socket.disconnect();
     socket = io({ auth: { token: getToken() } });
 
-    socket.on('request:reviewed', (data) => {
+    socket.on('request:reviewed', async (data) => {
         const statusLabel = data.status === 'approved' ? 'genehmigt' : 'abgelehnt';
         const type = data.status === 'approved' ? 'success' : 'error';
         showToast(`Antrag ${statusLabel}`, `Bearbeitet von ${data.reviewerName}`, type);
+        // Kalender-Cache invalidieren: frische Daten laden und Grid neu zeichnen,
+        // falls der Kalender gerade sichtbar ist
+        await loadCalendarRequests();
+        if (document.getElementById('page-calendar') &&
+            !document.getElementById('page-calendar').classList.contains('hidden')) {
+            renderCalendar();
+        }
     });
 
     socket.on('request:new', () => {
@@ -1471,6 +1478,9 @@ btnSubmitRequest.addEventListener('click', async () => {
         showToast('Antrag gestellt', 'Dein Vorgesetzter wurde benachrichtigt.', 'success');
         await loadMyRequests();
         await loadVacation();
+        // Kalender-Cache immer mitaktualisieren, damit er beim naechsten
+        // Oeffnen den neuen (pending) Antrag korrekt einfaerbt
+        await loadCalendarRequests();
         setTimeout(() => {
             closeRequestModal();
             newRequestSuccess.classList.add('hidden');
@@ -1542,6 +1552,12 @@ window._withdrawRequest = async function(id) {
         await apiFetch(`/requests/${id}`, { method: 'DELETE' });
         await loadMyRequests();
         await loadVacation();
+        await loadCalendarRequests();
+        // Kalender sofort neu zeichnen wenn er gerade sichtbar ist
+        if (document.getElementById('page-calendar') &&
+            !document.getElementById('page-calendar').classList.contains('hidden')) {
+            renderCalendar();
+        }
     } catch (err) {
         alert('Fehler: ' + err.message);
     }
@@ -3018,34 +3034,47 @@ function mondayBasedDay(date) {
     return (date.getDay() + 6) % 7;
 }
 
-// Map<ISODate, {type, status, reason}> über alle Tage des Monats berechnen
+// Timezone-sicheres Parsen von ISO-DATE-Strings (YYYY-MM-DD).
+// new Date("2026-06-05") interpretiert als UTC → in CET/CEST landet man auf dem 4. Juni.
+// Stattdessen: direkt als lokales Datum konstruieren.
+function parseDateLocal(isoStr) {
+    if (!isoStr) return null;
+    const s = String(isoStr).slice(0, 10); // nur "YYYY-MM-DD" nehmen
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, m - 1, d); // lokal, kein UTC-Shift
+}
+
+// Map<ISODate, {type, status, reason}> über alle Tage des sichtbaren Grids
 function buildAbsenceMap(requests, year, month) {
     const map = new Map();
-    // Anzeige-Range: erster Tag im Grid bis letzter Tag im Grid (inkl. Vor-/Nachlauftage)
     const first = new Date(year, month, 1);
-    const last  = new Date(year, month + 1, 0); // letzter Tag des Monats
     const gridStart = new Date(year, month, 1 - mondayBasedDay(first));
-    const gridEndDays = 42; // 6 Wochen × 7 Tage
     const gridEnd = new Date(gridStart);
-    gridEnd.setDate(gridEnd.getDate() + gridEndDays - 1);
+    gridEnd.setDate(gridEnd.getDate() + 41); // 42 Zellen (0..41)
+
+    gridStart.setHours(0, 0, 0, 0);
+    gridEnd.setHours(23, 59, 59, 999);
 
     requests.forEach(r => {
-        if (r.status === 'denied') return; // abgelehnte ignorieren
-        const from = new Date(r.date_from);
-        const to   = new Date(r.date_to);
-        // Range einschränken auf das, was im Grid sichtbar wäre
-        const start = from < gridStart ? new Date(gridStart) : new Date(from);
-        const end   = to   > gridEnd   ? new Date(gridEnd)   : new Date(to);
-        const cur = new Date(start);
-        cur.setHours(0, 0, 0, 0);
-        const endCmp = new Date(end);
-        endCmp.setHours(0, 0, 0, 0);
-        while (cur <= endCmp) {
-            map.set(toIsoLocal(cur), {
-                type: r.type,
-                status: r.status,
-                reason: r.reason || null,
-            });
+        if (r.status === 'denied') return;
+
+        // BUGFIX: MySQL DATE-String ohne UTC-Timezone-Shift parsen
+        const from = parseDateLocal(r.date_from);
+        const to   = parseDateLocal(r.date_to);
+        if (!from || !to) return;
+
+        from.setHours(0, 0, 0, 0);
+        to.setHours(0, 0, 0, 0);
+
+        const cur = new Date(from);
+        while (cur <= to) {
+            if (cur >= gridStart && cur <= gridEnd) {
+                map.set(toIsoLocal(cur), {
+                    type:   r.type,
+                    status: r.status,
+                    reason: r.reason || null,
+                });
+            }
             cur.setDate(cur.getDate() + 1);
         }
     });

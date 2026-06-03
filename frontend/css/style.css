@@ -1555,10 +1555,36 @@ body.modal-open { overflow: hidden; }
     color: #fff;
 }
 
-/* Abwesenheits-Markierung: Hintergrund kommt aus type-* Klassen */
-.calendar-day--absence {
-    /* background wird durch type-urlaub/-homeoffice/etc. gesetzt */
-}
+/* Abwesenheits-Markierung: Farben explizit mit erhoehter Spezifitaet.
+   .type-urlaub etc. sind auch als Badge-Klassen definiert – dort mit
+   niedrigerer Spezifitaet. Im Kalender-Grid muessen sie .calendar-day
+   (background: var(--surface)) sicher ueberschreiben. */
+.calendar-day.type-urlaub     { background: #dcfce7; border-color: #86efac; }
+.calendar-day.type-urlaub .calendar-day-number,
+.calendar-day.type-urlaub .calendar-day-label { color: #166534; }
+
+.calendar-day.type-homeoffice { background: #dbeafe; border-color: #93c5fd; }
+.calendar-day.type-homeoffice .calendar-day-number,
+.calendar-day.type-homeoffice .calendar-day-label { color: #1e40af; }
+
+.calendar-day.type-krank      { background: #fee2e2; border-color: #fca5a5; }
+.calendar-day.type-krank .calendar-day-number,
+.calendar-day.type-krank .calendar-day-label { color: #991b1b; }
+
+.calendar-day.type-gleitzeit  { background: #fef9c3; border-color: #fde047; }
+.calendar-day.type-gleitzeit .calendar-day-number,
+.calendar-day.type-gleitzeit .calendar-day-label { color: #854d0e; }
+
+.calendar-day.type-sonderurlaub { background: #ffedd5; border-color: #fdba74; }
+.calendar-day.type-sonderurlaub .calendar-day-number,
+.calendar-day.type-sonderurlaub .calendar-day-label { color: #9a3412; }
+
+/* Wochenend-Tage mit Abwesenheit: leicht abgedunkelt fuer visuelle Trennung */
+.calendar-day--weekend.type-urlaub     { background: #bbf7d0; }
+.calendar-day--weekend.type-homeoffice { background: #bfdbfe; }
+.calendar-day--weekend.type-krank      { background: #fecaca; }
+.calendar-day--weekend.type-gleitzeit  { background: #fef08a; }
+.calendar-day--weekend.type-sonderurlaub { background: #fed7aa; }
 
 /* Pending: gestreiftes Muster zur Unterscheidung */
 .calendar-day--pending {
@@ -1603,6 +1629,12 @@ body.modal-open { overflow: hidden; }
     border-radius: 4px;
     border: 1px solid transparent;
 }
+/* Farben fuer Legende-Swatches explizit (unabhaengig von Badge-Kontext) */
+.calendar-legend-swatch.type-urlaub      { background: #dcfce7; border-color: #86efac; }
+.calendar-legend-swatch.type-homeoffice  { background: #dbeafe; border-color: #93c5fd; }
+.calendar-legend-swatch.type-krank       { background: #fee2e2; border-color: #fca5a5; }
+.calendar-legend-swatch.type-gleitzeit   { background: #fef9c3; border-color: #fde047; }
+.calendar-legend-swatch.type-sonderurlaub { background: #ffedd5; border-color: #fdba74; }
 
 .calendar-legend-today {
     background: var(--surface);
