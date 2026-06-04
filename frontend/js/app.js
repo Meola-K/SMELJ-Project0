@@ -3037,7 +3037,7 @@ function renderMonthlyReport(data) {
 
     monthlyReportTbody.innerHTML = users.map(u => {
         const ot = u.overtimeMinutes;
-        const otColor = ot < 0 ? '#dc2626' : (ot > 0 ? '#16a34a' : '');
+        const otColor = ot < 0 ? 'var(--danger)' : (ot > 0 ? 'var(--success)' : '');
         return `
             <tr>
                 <td>${esc(u.name)}</td>
@@ -3160,7 +3160,7 @@ function renderExportRows(data) {
     exportEmpty.classList.add('hidden');
 
     exportTbody.innerHTML = rows.map(r => {
-        const color = r.overtimeMinutes < 0 ? '#dc2626' : (r.overtimeMinutes > 0 ? '#16a34a' : '');
+        const color = r.overtimeMinutes < 0 ? 'var(--danger)' : (r.overtimeMinutes > 0 ? 'var(--success)' : '');
         return `
             <tr>
                 <td>${esc(r.name)}</td>

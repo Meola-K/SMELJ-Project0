@@ -15,7 +15,9 @@
     --primary:             #2563eb;
     --primary-hover:       #1d4ed8;
     --danger:              #dc2626;
+    --danger-hover:        #b91c1c;
     --success:             #16a34a;
+    --success-hover:       #15803d;
     --bg:                  #f8fafc;
     --surface:             #ffffff;
     --border:              #e2e8f0;
@@ -72,42 +74,45 @@
     --primary:             #0369a1;   /* Blau, sicher erkennbar */
     --primary-hover:       #075985;
     --danger:              #b45309;   /* Orange statt Rot        */
-    --success:             #0369a1;   /* Blau statt Grün         */
+    --danger-hover:        #92400e;
+    --success:             #0f766e;   /* Türkis – klar von Primär-Blau trennbar */
+    --success-hover:       #115e59;
     --sidebar-active-bg:   rgba(3, 105, 161, 0.18);
     --sidebar-active-text: #38bdf8;
 
-    /* Urlaub: Blau (war Grün) */
-    --type-urlaub-bg:      #dbeafe;
-    --type-urlaub-text:    #1e3a8a;
-    --type-urlaub-border:  #93c5fd;
-    --type-urlaub-wknd:    #bfdbfe;
-    /* Homeoffice: Violett (war auch Blau → jetzt differenziert) */
-    --type-ho-bg:          #ede9fe;
-    --type-ho-text:        #3730a3;
-    --type-ho-border:      #c4b5fd;
+    /* Kräftige, über das Spektrum gespreizte Palette – Swatches klar trennbar.
+       Urlaub: Blau */
+    --type-urlaub-bg:      #bfdbfe;
+    --type-urlaub-text:    #1e40af;
+    --type-urlaub-border:  #60a5fa;
+    --type-urlaub-wknd:    #dbeafe;
+    /* Homeoffice: Violett */
+    --type-ho-bg:          #c4b5fd;
+    --type-ho-text:        #5b21b6;
+    --type-ho-border:      #8b5cf6;
     --type-ho-wknd:        #ddd6fe;
-    /* Krank: Orange/Amber (war Rot) */
-    --type-krank-bg:       #fef3c7;
-    --type-krank-text:     #92400e;
-    --type-krank-border:   #fcd34d;
-    --type-krank-wknd:     #fde68a;
-    /* Gleitzeit: Cyan (war Gelb → Deuteranope sehen Gelb, aber Cyan klarer) */
-    --type-gleit-bg:       #cffafe;
-    --type-gleit-text:     #155e75;
-    --type-gleit-border:   #67e8f9;
-    --type-gleit-wknd:     #a5f3fc;
-    /* Sonderurlaub: Fuchsia/Pink */
-    --type-sonder-bg:      #fdf4ff;
-    --type-sonder-text:    #86198f;
-    --type-sonder-border:  #e879f9;
-    --type-sonder-wknd:    #f5d0fe;
+    /* Krank: Orange */
+    --type-krank-bg:       #fdba74;
+    --type-krank-text:     #9a3412;
+    --type-krank-border:   #f97316;
+    --type-krank-wknd:     #fed7aa;
+    /* Gleitzeit: Gelb (kräftig, raus aus dem Blau-Cluster) */
+    --type-gleit-bg:       #fde047;
+    --type-gleit-text:     #854d0e;
+    --type-gleit-border:   #eab308;
+    --type-gleit-wknd:     #fef08a;
+    /* Sonderurlaub: Pink/Magenta */
+    --type-sonder-bg:      #f9a8d4;
+    --type-sonder-text:    #9d174d;
+    --type-sonder-border:  #ec4899;
+    --type-sonder-wknd:    #fbcfe8;
     /* Status-Badges */
     --badge-pending-bg:    #fef3c7;
     --badge-pending-text:  #92400e;
     --badge-approved-bg:   #dbeafe;
     --badge-approved-text: #1e3a8a;
-    --badge-denied-bg:     #fef3c7;
-    --badge-denied-text:   #78350f;
+    --badge-denied-bg:     #fce7f3;   /* Rotviolett statt Amber – sonst = pending */
+    --badge-denied-text:   #9d174d;
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -119,42 +124,45 @@
     --primary:             #0ea5e9;   /* Hellblau, keine Rotkomponente */
     --primary-hover:       #0284c7;
     --danger:              #ca8a04;   /* Gold/Gelb statt Rot           */
-    --success:             #0ea5e9;   /* Blau statt Grün               */
+    --danger-hover:        #a16207;
+    --success:             #0f766e;   /* Türkis – klar von Primär-Blau trennbar */
+    --success-hover:       #115e59;
     --sidebar-active-bg:   rgba(14, 165, 233, 0.18);
     --sidebar-active-text: #7dd3fc;
 
-    /* Urlaub: Hellblau (sicher von Rot abgrenzbar) */
-    --type-urlaub-bg:      #e0f2fe;
-    --type-urlaub-text:    #075985;
-    --type-urlaub-border:  #7dd3fc;
-    --type-urlaub-wknd:    #bae6fd;
+    /* Kräftige, über das Spektrum gespreizte Palette – Swatches klar trennbar.
+       Urlaub: Blau */
+    --type-urlaub-bg:      #bfdbfe;
+    --type-urlaub-text:    #1e40af;
+    --type-urlaub-border:  #60a5fa;
+    --type-urlaub-wknd:    #dbeafe;
     /* Homeoffice: Violett */
-    --type-ho-bg:          #ede9fe;
-    --type-ho-text:        #4c1d95;
-    --type-ho-border:      #c4b5fd;
+    --type-ho-bg:          #c4b5fd;
+    --type-ho-text:        #5b21b6;
+    --type-ho-border:      #8b5cf6;
     --type-ho-wknd:        #ddd6fe;
-    /* Krank: Gold/Gelb (Rot unsichtbar für Protanope) */
-    --type-krank-bg:       #fef9c3;
-    --type-krank-text:     #713f12;
-    --type-krank-border:   #fde047;
-    --type-krank-wknd:     #fef08a;
-    /* Gleitzeit: Teal */
-    --type-gleit-bg:       #ccfbf1;
-    --type-gleit-text:     #134e4a;
-    --type-gleit-border:   #5eead4;
-    --type-gleit-wknd:     #99f6e4;
-    /* Sonderurlaub: Orange (Protanope unterscheiden Orange von Blau) */
-    --type-sonder-bg:      #ffedd5;
-    --type-sonder-text:    #7c2d12;
-    --type-sonder-border:  #fb923c;
-    --type-sonder-wknd:    #fed7aa;
+    /* Krank: Orange */
+    --type-krank-bg:       #fdba74;
+    --type-krank-text:     #9a3412;
+    --type-krank-border:   #f97316;
+    --type-krank-wknd:     #fed7aa;
+    /* Gleitzeit: Gelb (kräftig, klar von Orange/Blau getrennt) */
+    --type-gleit-bg:       #fde047;
+    --type-gleit-text:     #854d0e;
+    --type-gleit-border:   #eab308;
+    --type-gleit-wknd:     #fef08a;
+    /* Sonderurlaub: Pink/Magenta */
+    --type-sonder-bg:      #f9a8d4;
+    --type-sonder-text:    #9d174d;
+    --type-sonder-border:  #ec4899;
+    --type-sonder-wknd:    #fbcfe8;
     /* Status-Badges */
     --badge-pending-bg:    #fef9c3;
     --badge-pending-text:  #713f12;
     --badge-approved-bg:   #e0f2fe;
     --badge-approved-text: #075985;
-    --badge-denied-bg:     #fef9c3;
-    --badge-denied-text:   #92400e;
+    --badge-denied-bg:     #fce7f3;   /* Rotviolett statt Gold – sonst = pending */
+    --badge-denied-text:   #9d174d;
 }
 
 body {
@@ -329,7 +337,7 @@ body {
 
 .sidebar-badge {
     margin-left: auto;
-    background: #dc2626;
+    background: var(--danger);
     color: white;
     font-size: 0.7rem;
     font-weight: 700;
@@ -353,7 +361,7 @@ body {
 
 .toast {
     background: white;
-    border-left: 4px solid #2563eb;
+    border-left: 4px solid var(--primary);
     border-radius: 6px;
     padding: 0.75rem 1rem;
     box-shadow: 0 8px 24px rgba(0,0,0,0.12);
@@ -365,18 +373,18 @@ body {
     gap: 0.6rem;
 }
 
-.toast.toast-success { border-left-color: #16a34a; }
-.toast.toast-error   { border-left-color: #dc2626; }
-.toast.toast-info    { border-left-color: #2563eb; }
+.toast.toast-success { border-left-color: var(--success); }
+.toast.toast-error   { border-left-color: var(--danger); }
+.toast.toast-info    { border-left-color: var(--primary); }
 
 .toast-icon {
     font-size: 1rem;
     line-height: 1.4;
     flex-shrink: 0;
 }
-.toast.toast-success .toast-icon { color: #16a34a; }
-.toast.toast-error   .toast-icon { color: #dc2626; }
-.toast.toast-info    .toast-icon { color: #2563eb; }
+.toast.toast-success .toast-icon { color: var(--success); }
+.toast.toast-error   .toast-icon { color: var(--danger); }
+.toast.toast-info    .toast-icon { color: var(--primary); }
 
 .toast-text { flex: 1; min-width: 0; }
 
@@ -487,11 +495,11 @@ body.modal-open { overflow: hidden; }
 }
 
 .sidebar-logout:hover {
-    background: rgba(220, 38, 38, 0.15);
+    background: color-mix(in srgb, var(--danger) 15%, transparent);
 }
 
 .sidebar-logout:hover svg {
-    stroke: #f87171;
+    stroke: var(--danger);
 }
 
 /* ── Main Content ───────────────────────────────────── */
@@ -629,12 +637,12 @@ body.modal-open { overflow: hidden; }
 }
 
 .btn-success {
-    background: #16a34a;
+    background: var(--success);
     color: white;
-    border-color: #16a34a;
+    border-color: var(--success);
 }
 
-.btn-success:hover { background: #15803d; }
+.btn-success:hover { background: var(--success-hover); }
 .btn-sm { padding: 0.25rem 0.75rem; font-size: 0.8rem; }
 .btn-block { width: 100%; }
 
@@ -733,15 +741,15 @@ body.modal-open { overflow: hidden; }
 }
 
 .alert-error {
-    background: #fef2f2;
+    background: color-mix(in srgb, var(--danger) 12%, white);
     color: var(--danger);
-    border: 1px solid #fecaca;
+    border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
 }
 
 .alert-success {
-    background: #f0fdf4;
+    background: color-mix(in srgb, var(--success) 12%, white);
     color: var(--success);
-    border: 1px solid #bbf7d0;
+    border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
 }
 
 /* ── Cards ──────────────────────────────────────────── */
@@ -795,7 +803,7 @@ body.modal-open { overflow: hidden; }
 
 .stamp-indicator.in {
     background: var(--success);
-    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 50%, transparent);
     animation: stamp-pulse 2s infinite;
 }
 
@@ -805,9 +813,9 @@ body.modal-open { overflow: hidden; }
 }
 
 @keyframes stamp-pulse {
-    0%   { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5); }
-    70%  { box-shadow: 0 0 0 8px rgba(22, 163, 74, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+    0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 50%, transparent); }
+    70%  { box-shadow: 0 0 0 8px color-mix(in srgb, var(--success) 0%, transparent); }
+    100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 0%, transparent); }
 }
 
 .stamp-last-time {
@@ -878,15 +886,15 @@ body.modal-open { overflow: hidden; }
     color: white;
 }
 
-.btn-stamp.stamp-out:hover:not(:disabled) { background: #b91c1c; }
+.btn-stamp.stamp-out:hover:not(:disabled) { background: var(--danger-hover); }
 
 .stamp-warning {
     display: flex;
     align-items: flex-start;
     gap: 0.4rem;
-    background: #fef9c3;
-    color: #854d0e;
-    border: 1px solid #fde68a;
+    background: var(--badge-pending-bg);
+    color: var(--badge-pending-text);
+    border: 1px solid color-mix(in srgb, var(--badge-pending-text) 30%, transparent);
     border-radius: var(--radius);
     padding: 0.55rem 0.85rem;
     font-size: 0.82rem;
@@ -1129,8 +1137,8 @@ body.modal-open { overflow: hidden; }
     font-weight: 500;
 }
 
-.badge-active { background: #dcfce7; color: #166534; }
-.badge-inactive { background: #fee2e2; color: #991b1b; }
+.badge-active { background: var(--badge-approved-bg); color: var(--badge-approved-text); }
+.badge-inactive { background: var(--badge-denied-bg); color: var(--badge-denied-text); }
 .badge-role { background: #e0e7ff; color: #3730a3; }
 
 .actions-cell {
@@ -1230,9 +1238,9 @@ body.modal-open { overflow: hidden; }
     border-top: 4px solid var(--border);
 }
 
-.team-stat-present { border-top-color: #16a34a; }
-.team-stat-absent  { border-top-color: #dc2626; }
-.team-stat-total   { border-top-color: #2563eb; }
+.team-stat-present { border-top-color: var(--success); }
+.team-stat-absent  { border-top-color: var(--danger); }
+.team-stat-total   { border-top-color: var(--primary); }
 
 .team-stat-value {
     font-size: 2rem;
@@ -1241,9 +1249,9 @@ body.modal-open { overflow: hidden; }
     margin-bottom: 0.25rem;
 }
 
-.team-stat-present .team-stat-value { color: #16a34a; }
-.team-stat-absent  .team-stat-value { color: #dc2626; }
-.team-stat-total   .team-stat-value { color: #2563eb; }
+.team-stat-present .team-stat-value { color: var(--success); }
+.team-stat-absent  .team-stat-value { color: var(--danger); }
+.team-stat-total   .team-stat-value { color: var(--primary); }
 
 .team-stat-label {
     font-size: 0.8rem;
@@ -1253,8 +1261,8 @@ body.modal-open { overflow: hidden; }
     font-weight: 500;
 }
 
-.badge-present { background: #dcfce7; color: #166534; }
-.badge-absent  { background: #fee2e2; color: #991b1b; }
+.badge-present { background: var(--badge-approved-bg); color: var(--badge-approved-text); }
+.badge-absent  { background: var(--badge-denied-bg); color: var(--badge-denied-text); }
 
 /* ── Meine Anträge ──────────────────────────────────── */
 
@@ -1266,8 +1274,8 @@ body.modal-open { overflow: hidden; }
 .badge-approved { background: var(--badge-approved-bg); color: var(--badge-approved-text); }
 .badge-denied   { background: var(--badge-denied-bg);   color: var(--badge-denied-text); }
 
-.btn-withdraw { background: #fee2e2; color: #991b1b; border: none; }
-.btn-withdraw:hover { background: #fecaca; }
+.btn-withdraw { background: var(--badge-denied-bg); color: var(--badge-denied-text); border: none; }
+.btn-withdraw:hover { background: color-mix(in srgb, var(--badge-denied-text) 18%, var(--badge-denied-bg)); }
 
 /* ── Mobile Responsive ──────────────────────────────── */
 
@@ -1368,10 +1376,10 @@ body.modal-open { overflow: hidden; }
     color: var(--text-muted);
 }
 
-.btn-approve { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-.btn-approve:hover { background: #bbf7d0; }
-.btn-deny    { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
-.btn-deny:hover    { background: #fecaca; }
+.btn-approve { background: var(--badge-approved-bg); color: var(--badge-approved-text); border: 1px solid color-mix(in srgb, var(--badge-approved-text) 25%, transparent); }
+.btn-approve:hover { background: color-mix(in srgb, var(--badge-approved-text) 18%, var(--badge-approved-bg)); }
+.btn-deny    { background: var(--badge-denied-bg); color: var(--badge-denied-text); border: 1px solid color-mix(in srgb, var(--badge-denied-text) 25%, transparent); }
+.btn-deny:hover    { background: color-mix(in srgb, var(--badge-denied-text) 18%, var(--badge-denied-bg)); }
 
 
 
@@ -1810,9 +1818,9 @@ body.modal-open { overflow: hidden; }
 /* ── SCRUM-157: Zeitkorrektur-Badges ──────────────────────────
    Eigene Farben für die drei Korrekturarten – im Stil der bestehenden
    Antragstyp-Badges (Sonderurlaub-Ticket). */
-.type-add    { background: #dcfce7; color: #166534; border-color: #86efac; }
-.type-edit   { background: #fef9c3; color: #854d0e; border-color: #fde047; }
-.type-delete { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+.type-add    { background: var(--badge-approved-bg); color: var(--badge-approved-text); border-color: color-mix(in srgb, var(--badge-approved-text) 30%, transparent); }
+.type-edit   { background: var(--badge-pending-bg); color: var(--badge-pending-text); border-color: color-mix(in srgb, var(--badge-pending-text) 30%, transparent); }
+.type-delete { background: var(--badge-denied-bg); color: var(--badge-denied-text); border-color: color-mix(in srgb, var(--badge-denied-text) 30%, transparent); }
 
 /* SCRUM-157: textarea im Korrektur-Modal an Form-Stil angleichen */
 #modal-new-correction textarea {
