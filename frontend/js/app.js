@@ -393,15 +393,42 @@ function setupSocket() {
     socket = io({ auth: { token: getToken() } });
 
     socket.on('request:reviewed', async (data) => {
-        const statusLabel = data.status === 'approved' ? 'genehmigt' : 'abgelehnt';
-        const type = data.status === 'approved' ? 'success' : 'error';
-        showToast(`Antrag ${statusLabel}`, `Bearbeitet von ${data.reviewerName}`, type);
+        let title, body, type;
+        if (data.status === 'first_approved') {
+            title = 'Antrag erstgenehmigt';
+            body  = `Erste Freigabe durch ${data.reviewerName} – wartet auf finale Bestätigung`;
+            type  = 'info';
+        } else if (data.status === 'approved') {
+            title = 'Antrag genehmigt';
+            body  = `Endgültig freigegeben durch ${data.reviewerName}`;
+            type  = 'success';
+        } else {
+            title = 'Antrag abgelehnt';
+            body  = `Abgelehnt durch ${data.reviewerName}`;
+            type  = 'error';
+        }
+        showToast(title, body, type);
+
+        if (typeof loadMyRequests === 'function') loadMyRequests();
+        if (typeof loadVacation === 'function') loadVacation();
         // Kalender-Cache invalidieren: frische Daten laden und Grid neu zeichnen,
         // falls der Kalender gerade sichtbar ist
         await loadCalendarRequests();
         if (document.getElementById('page-calendar') &&
             !document.getElementById('page-calendar').classList.contains('hidden')) {
             renderCalendar();
+        }
+    });
+
+    // SCRUM-303: Erstgenehmigter Antrag wartet auf zweite Freigabe – andere Prüfer informieren
+    socket.on('request:awaiting_second', (data) => {
+        if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'vorgesetzter')) return;
+        updateSidebarPendingBadge();
+        if (data.firstReviewerId === currentUser.id) return;
+        showToast('Zweite Freigabe nötig', 'Ein erstgenehmigter Antrag wartet auf die finale Bestätigung', 'info');
+        const ov = document.getElementById('page-requests-overview');
+        if (ov && !ov.classList.contains('hidden') && typeof loadRequestsOverview === 'function') {
+            loadRequestsOverview();
         }
     });
 
@@ -1506,6 +1533,7 @@ const reasonLabels = {
 
 const statusLabels = {
     pending: 'Ausstehend',
+    first_approved: 'Erstgenehmigt',
     approved: 'Genehmigt',
     denied: 'Abgelehnt',
 };
@@ -1675,6 +1703,35 @@ function renderTypeBadge(r) {
     return `<span class="${cls}">${esc(label)}</span>`;
 }
 
+// SCRUM-302: Zeitpunkt einer Genehmigung kompakt (dd.mm.yy hh:mm)
+function formatReviewWhen(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    if (isNaN(d)) return '';
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yy = String(d.getFullYear()).slice(-2);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mi = String(d.getMinutes()).padStart(2, '0');
+    return `${dd}.${mm}.${yy} ${hh}:${mi}`;
+}
+
+// SCRUM-302: Beide Genehmigungsstufen sichtbar machen (wer, wann)
+function renderApproverCell(r) {
+    const lines = [];
+    if (r.first_reviewer_name && r.first_reviewer_name.trim()) {
+        lines.push(`<span class="approver-line"><span class="approver-stage stage-1">1.</span>${esc(r.first_reviewer_name)}<span class="approver-when">${formatReviewWhen(r.first_reviewed_at)}</span></span>`);
+    }
+    if (r.reviewer_name && r.reviewer_name.trim()) {
+        const denied = r.status === 'denied';
+        const stageCls = denied ? 'stage-x' : 'stage-2';
+        const stageLbl = denied ? '✕' : '2.';
+        lines.push(`<span class="approver-line"><span class="approver-stage ${stageCls}">${stageLbl}</span>${esc(r.reviewer_name)}<span class="approver-when">${formatReviewWhen(r.reviewed_at)}</span></span>`);
+    }
+    if (!lines.length) return '<span class="text-muted">–</span>';
+    return `<div class="approver-info">${lines.join('')}</div>`;
+}
+
 function renderMyRequests(requests) {
     if (!requests || requests.length === 0) {
         requestsTable.classList.add('hidden');
@@ -1690,7 +1747,6 @@ function renderMyRequests(requests) {
         const fromDate = formatDate(r.date_from);
         const toDate = formatDate(r.date_to);
         const zeitraum = fromDate === toDate ? fromDate : `${fromDate} – ${toDate}`;
-        const bearbeiter = r.reviewer_name ? esc(r.reviewer_name) : '–';
         const withdrawBtn = r.status === 'pending'
             ? `<button class="btn btn-sm btn-withdraw" onclick="window._withdrawRequest(${r.id})">Zurückziehen</button>`
             : '';
@@ -1699,7 +1755,7 @@ function renderMyRequests(requests) {
                 <td>${renderTypeBadge(r)}</td>
                 <td>${zeitraum}</td>
                 <td><span class="badge ${statusClass}">${statusLabel}</span></td>
-                <td>${bearbeiter}</td>
+                <td>${renderApproverCell(r)}</td>
                 <td>${withdrawBtn}</td>
             </tr>
         `;
@@ -2086,14 +2142,19 @@ function renderPendingRequests(requests, skipBadge) {
         const from = formatDate(r.date_from);
         const to = formatDate(r.date_to);
         const zeitraum = from === to ? from : `${from} – ${to}`;
+        const isSecond = r.status === 'first_approved';
+        const stageInfo = isSecond
+            ? `<div class="pending-stage stage-2">2. Freigabe · erste von ${esc(r.first_reviewer_name || '—')}</div>`
+            : `<div class="pending-stage stage-1">1. Freigabe</div>`;
+        const approveLabel = isSecond ? 'Endgültig genehmigen' : 'Genehmigen';
         return `
             <tr>
-                <td data-label="Mitarbeiter"><strong>${esc(r.user_name)}</strong></td>
+                <td data-label="Mitarbeiter"><strong>${esc(r.user_name)}</strong>${stageInfo}</td>
                 <td data-label="Typ">${renderTypeBadge(r)}</td>
                 <td data-label="Zeitraum">${zeitraum}</td>
                 <td class="col-hide-sm" data-label="Notiz">${r.note ? esc(r.note) : '<span class="text-muted">–</span>'}</td>
                 <td class="actions-cell">
-                    <button class="btn btn-sm btn-approve" onclick="window._reviewRequest(${r.id}, 'approved')">Genehmigen</button>
+                    <button class="btn btn-sm btn-approve" onclick="window._reviewRequest(${r.id}, 'approved')">${approveLabel}</button>
                     <button class="btn btn-sm btn-deny" onclick="window._reviewRequest(${r.id}, 'denied')">Ablehnen</button>
                 </td>
             </tr>
@@ -2137,7 +2198,6 @@ function renderAllRequests(requests) {
         const zeitraum = from === to ? from : `${from} – ${to}`;
         const statusClass = `badge-${r.status}`;
         const statusLabel = statusLabels[r.status] || r.status;
-        const bearbeiter  = r.reviewer_name ? esc(r.reviewer_name) : '<span class="text-muted">–</span>';
         const eingereicht = r.created_at ? formatDate(r.created_at) : '–';
         return `
             <tr>
@@ -2145,7 +2205,7 @@ function renderAllRequests(requests) {
                 <td data-label="Typ">${renderTypeBadge(r)}</td>
                 <td data-label="Zeitraum">${zeitraum}</td>
                 <td data-label="Status"><span class="badge ${statusClass}">${statusLabel}</span></td>
-                <td class="col-hide-md" data-label="Bearbeiter">${bearbeiter}</td>
+                <td class="col-hide-md" data-label="Bearbeiter">${renderApproverCell(r)}</td>
                 <td class="col-hide-sm" data-label="Eingereicht">${eingereicht}</td>
             </tr>
         `;
@@ -2794,11 +2854,12 @@ const REPORT_REASON_LABELS = {
 };
 const REPORT_STATUS_BADGE = {
     approved: 'badge-active',
+    first_approved: 'badge-role',
     pending: 'badge-role',
     denied: 'badge-inactive'
 };
 const REPORT_STATUS_LABEL = {
-    approved: 'Genehmigt', pending: 'Ausstehend', denied: 'Abgelehnt'
+    approved: 'Genehmigt', first_approved: 'Erstgenehmigt', pending: 'Ausstehend', denied: 'Abgelehnt'
 };
 
 async function loadReportsPage() {
@@ -3371,7 +3432,7 @@ function renderCalendar() {
         if (absence) {
             classes.push('calendar-day--absence');
             classes.push(`type-${absence.type}`);
-            if (absence.status === 'pending') classes.push('calendar-day--pending');
+            if (absence.status === 'pending' || absence.status === 'first_approved') classes.push('calendar-day--pending');
         }
 
         // Label – Typ/Anlass kurz anzeigen, nur im aktuellen Monat
@@ -3382,6 +3443,7 @@ function renderCalendar() {
                 label = reasonLabels[absence.reason] || label;
             }
             if (absence.status === 'pending') label += ' (offen)';
+            else if (absence.status === 'first_approved') label += ' (1. Freigabe)';
         }
 
         // ARIA: Wochentag + Datum lesen

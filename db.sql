@@ -65,19 +65,21 @@ CREATE TABLE requests (
     note TEXT DEFAULT NULL,
     -- Anlass nur bei type='sonderurlaub' relevant; bei 'sonstiges' MUSS note gefüllt sein (Freitext)
     reason ENUM('hochzeit','geburt','trauerfall','umzug','sonstiges') DEFAULT NULL,
-    status ENUM('pending','approved','denied') DEFAULT 'pending',
+    -- 4-Augen-Prinzip: pending -> first_approved -> approved (Ablehnung jederzeit -> denied)
+    status ENUM('pending','first_approved','approved','denied') DEFAULT 'pending',
+    first_reviewed_by INT DEFAULT NULL,
+    first_reviewed_at DATETIME DEFAULT NULL,
     reviewed_by INT DEFAULT NULL,
     reviewed_at DATETIME DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (first_reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
     FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_user_status (user_id, status)
 );
 
 -- Migration für bestehende Datenbanken (separat ausführen, falls die Tabelle schon existiert):
--- ALTER TABLE requests
---   MODIFY COLUMN type ENUM('urlaub','gleitzeit','homeoffice','krank','sonderurlaub') NOT NULL,
---   ADD COLUMN reason ENUM('hochzeit','geburt','trauerfall','umzug','sonstiges') DEFAULT NULL AFTER note;
+-- siehe migrate_4eyes_requests.sql
 
 CREATE TABLE devices (
     id VARCHAR(50) PRIMARY KEY,
