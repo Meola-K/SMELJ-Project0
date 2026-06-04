@@ -539,7 +539,7 @@ router.get('/stats', auth, role('admin'), async (req, res) => {
                  SELECT MAX(id) FROM timestamps_log WHERE DATE(stamp_time) = ? GROUP BY user_id
              ) AND type = 'in'`, [today, today]
         );
-        const [pendingReqs] = await db.query("SELECT COUNT(*) as count FROM requests WHERE status IN ('pending','first_approved')");
+        const [pendingReqs] = await db.query("SELECT COUNT(*) as count FROM requests WHERE status = 'pending'");
         const [activeDevices] = await db.query('SELECT COUNT(*) as count FROM devices WHERE active = 1 AND last_seen > DATE_SUB(NOW(), INTERVAL 5 MINUTE)');
 
         res.json({
@@ -593,7 +593,7 @@ router.get('/vacation/balance', auth, async (req, res) => {
 
         const [pending] = await db.query(
             `SELECT COUNT(*) as count FROM requests
-             WHERE user_id = ? AND type = 'urlaub' AND status IN ('pending','first_approved')
+             WHERE user_id = ? AND type = 'urlaub' AND status = 'pending'
              AND YEAR(date_from) = ?`,
             [userId, year]
         );
@@ -864,7 +864,7 @@ router.get('/reports/monthly', auth, role('admin', 'vorgesetzter'), async (req, 
 //                                &format=csv|json (default: json)
 
 const ABSENCE_TYPES = ['urlaub', 'gleitzeit', 'homeoffice', 'krank', 'sonderurlaub'];
-const ABSENCE_STATUSES = ['pending', 'first_approved', 'approved', 'denied'];
+const ABSENCE_STATUSES = ['pending', 'approved', 'denied'];
 const TYPE_LABELS_DE = {
     urlaub: 'Urlaub', gleitzeit: 'Gleitzeit', homeoffice: 'Homeoffice',
     krank: 'Krank', sonderurlaub: 'Sonderurlaub'
@@ -874,7 +874,7 @@ const REASON_LABELS_DE = {
     umzug: 'Umzug', sonstiges: 'Sonstiges'
 };
 const STATUS_LABELS_DE = {
-    pending: 'Ausstehend', first_approved: 'Erstgenehmigt', approved: 'Genehmigt', denied: 'Abgelehnt'
+    pending: 'Ausstehend', approved: 'Genehmigt', denied: 'Abgelehnt'
 };
 
 function countWorkdays(from, to) {

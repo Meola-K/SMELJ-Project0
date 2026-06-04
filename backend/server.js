@@ -14,6 +14,7 @@ import requestRoutes from './routes/requests.js';
 import adminRoutes from './routes/admin.js';
 import correctionRoutes from './routes/corrections.js';
 import deviceRoutes from './routes/devices.js';
+import shiftRoutes from './routes/shifts.js';
 
 dotenv.config();
 
@@ -68,6 +69,7 @@ app.use('/api/stamp', stampRoutes);
 app.use('/api/requests', requestRoutes);
 app.use('/api/corrections', correctionRoutes);
 app.use('/api/devices', deviceRoutes);
+app.use('/api/shifts', shiftRoutes);
 app.use('/api/admin', adminRoutes);
 
 app.get('*', (req, res) => {

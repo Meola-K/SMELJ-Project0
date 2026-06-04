@@ -71,6 +71,11 @@
                     <svg class="sidebar-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                     <span>Kalender</span>
                 </a>
+                <a href="#schichtplan" class="sidebar-link" data-route="schichtplan" data-roles="admin,vorgesetzter,arbeiter">
+                    <svg class="sidebar-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <span>Schichtplan</span>
+                    <span class="sidebar-badge hidden" id="sidebar-shift-badge" aria-label="Offene Tauschanfragen">0</span>
+                </a>
                 <a href="#historie" class="sidebar-link" data-route="historie" data-roles="admin,vorgesetzter,arbeiter">
                     <svg class="sidebar-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><polyline points="12 7 12 12 15 15"/></svg>
                     <span>Stempelhistorie</span>
@@ -706,6 +711,136 @@
                                 <tbody id="corrections-tbody"></tbody>
                             </table>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Schichtplan (SCRUM-346/349) -->
+            <div id="page-schichtplan" class="page hidden">
+                <div class="container">
+                    <div class="page-header">
+                        <h1>Schichtplan</h1>
+                    </div>
+
+                    <div class="req-tabs" role="tablist" aria-label="Schichtplan">
+                        <button class="req-tab active" data-shifttab="my" role="tab" aria-selected="true" aria-controls="shift-panel-my" id="shifttab-my">Meine Schichten</button>
+                        <button class="req-tab" data-shifttab="plan" data-roles="admin,vorgesetzter" role="tab" aria-selected="false" aria-controls="shift-panel-plan" id="shifttab-plan">Planung</button>
+                        <button class="req-tab" data-shifttab="review" data-roles="admin,vorgesetzter" role="tab" aria-selected="false" aria-controls="shift-panel-review" id="shifttab-review">
+                            Tausch-Freigaben
+                            <span class="req-tab-badge hidden" id="shift-review-badge" aria-label="Offene Tausch-Freigaben">0</span>
+                        </button>
+                    </div>
+
+                    <!-- Meine Schichten -->
+                    <div id="shift-panel-my" class="req-panel" role="tabpanel" aria-labelledby="shifttab-my">
+                        <div class="card admin-table-wrap">
+                            <h3 class="card-title">Eingehende Tauschanfragen</h3>
+                            <div id="shift-incoming-empty" class="text-muted hidden">Keine offenen Tauschanfragen an dich.</div>
+                            <div id="shift-incoming-list" class="shift-list"></div>
+                        </div>
+                        <div class="card admin-table-wrap">
+                            <h3 class="card-title">Meine kommenden Schichten</h3>
+                            <div id="shift-my-empty" class="text-muted hidden">Du hast keine kommenden Schichten.</div>
+                            <div id="shift-my-list" class="shift-list"></div>
+                        </div>
+                        <div class="card admin-table-wrap">
+                            <h3 class="card-title">Meine Tauschanfragen</h3>
+                            <div id="shift-outgoing-empty" class="text-muted hidden">Du hast keine Tauschanfragen gestellt.</div>
+                            <div id="shift-outgoing-list" class="shift-list"></div>
+                        </div>
+                    </div>
+
+                    <!-- Planung -->
+                    <div id="shift-panel-plan" class="req-panel hidden" role="tabpanel" aria-labelledby="shifttab-plan">
+                        <div class="card shift-plan-controls">
+                            <div class="form-group">
+                                <label for="shift-plan-from">Von</label>
+                                <input type="date" id="shift-plan-from">
+                            </div>
+                            <div class="form-group">
+                                <label for="shift-plan-to">Bis</label>
+                                <input type="date" id="shift-plan-to">
+                            </div>
+                            <button class="btn btn-sm" id="btn-shift-plan-load">Anzeigen</button>
+                            <button class="btn btn-sm btn-primary" id="btn-open-create-shift">+ Neue Schicht</button>
+                        </div>
+                        <div id="shift-plan-empty" class="text-muted hidden">Keine Schichten im gewählten Zeitraum.</div>
+                        <div id="shift-plan-list" class="shift-list"></div>
+                    </div>
+
+                    <!-- Tausch-Freigaben -->
+                    <div id="shift-panel-review" class="req-panel hidden" role="tabpanel" aria-labelledby="shifttab-review">
+                        <div class="card admin-table-wrap">
+                            <div id="shift-review-empty" class="text-muted hidden">Keine offenen Tausch-Freigaben.</div>
+                            <div id="shift-review-list" class="shift-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal: Neue Schicht (SCRUM-346) -->
+            <div id="modal-create-shift" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="create-shift-title">
+                <div class="modal-backdrop"></div>
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 id="create-shift-title">Neue Schicht</h2>
+                        <button class="modal-close" aria-label="Schließen">&times;</button>
+                    </div>
+                    <div id="create-shift-error" class="alert alert-error hidden" role="alert"></div>
+                    <div id="create-shift-success" class="alert alert-success hidden" role="status"></div>
+                    <div class="form-group">
+                        <label for="cs-title">Titel (optional)</label>
+                        <input type="text" id="cs-title" maxlength="100" placeholder="z. B. Frühschicht">
+                    </div>
+                    <div class="form-group">
+                        <label for="cs-date">Datum</label>
+                        <input type="date" id="cs-date">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="cs-start">Beginn</label>
+                            <input type="time" id="cs-start">
+                        </div>
+                        <div class="form-group">
+                            <label for="cs-end">Ende</label>
+                            <input type="time" id="cs-end">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="cs-group">Gruppe (optional)</label>
+                            <select id="cs-group"><option value="">– Keine –</option></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="cs-minstaff">Mindestbesetzung</label>
+                            <input type="number" id="cs-minstaff" min="0" max="999" value="1">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn modal-close">Abbrechen</button>
+                        <button class="btn btn-primary" id="btn-submit-shift">Schicht erstellen</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal: Schicht tauschen (SCRUM-349) -->
+            <div id="modal-offer-swap" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="offer-swap-title">
+                <div class="modal-backdrop"></div>
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 id="offer-swap-title">Schicht tauschen</h2>
+                        <button class="modal-close" aria-label="Schließen">&times;</button>
+                    </div>
+                    <div id="offer-swap-error" class="alert alert-error hidden" role="alert"></div>
+                    <p id="offer-swap-info" class="text-muted"></p>
+                    <div class="form-group">
+                        <label for="os-colleague">Kollege</label>
+                        <select id="os-colleague"><option value="">– Lädt… –</option></select>
+                    </div>
+                    <p class="text-muted offer-swap-hint">Der Kollege muss annehmen und ein Vorgesetzter muss den Tausch bestätigen.</p>
+                    <div class="modal-footer">
+                        <button class="btn modal-close">Abbrechen</button>
+                        <button class="btn btn-primary" id="btn-submit-swap">Tausch anbieten</button>
                     </div>
                 </div>
             </div>

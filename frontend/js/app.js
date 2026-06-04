@@ -362,6 +362,7 @@ function showApp() {
         updateSidebarPendingBadge();
         clearInterval(window._pendingBadgeTimer);
         window._pendingBadgeTimer = setInterval(updateSidebarPendingBadge, 30000);
+        if (typeof updateSwapReviewBadge === 'function') updateSwapReviewBadge();
     }
 
     setupSocket();
@@ -393,24 +394,14 @@ function setupSocket() {
     socket = io({ auth: { token: getToken() } });
 
     socket.on('request:reviewed', async (data) => {
-        let title, body, type;
         if (data.status === 'first_approved') {
-            title = 'Antrag erstgenehmigt';
-            body  = `Erste Freigabe durch ${data.reviewerName} – wartet auf finale Bestätigung`;
-            type  = 'info';
-        } else if (data.status === 'approved') {
-            title = 'Antrag genehmigt';
-            body  = `Endgültig freigegeben durch ${data.reviewerName}`;
-            type  = 'success';
+            showToast('Erste Genehmigung erteilt', `Bearbeitet von ${data.reviewerName} – wartet auf zweite Freigabe`, 'info');
         } else {
-            title = 'Antrag abgelehnt';
-            body  = `Abgelehnt durch ${data.reviewerName}`;
-            type  = 'error';
+            const statusLabel = data.status === 'approved' ? 'genehmigt' : 'abgelehnt';
+            const type = data.status === 'approved' ? 'success' : 'error';
+            showToast(`Antrag ${statusLabel}`, `Bearbeitet von ${data.reviewerName}`, type);
         }
-        showToast(title, body, type);
-
         if (typeof loadMyRequests === 'function') loadMyRequests();
-        if (typeof loadVacation === 'function') loadVacation();
         // Kalender-Cache invalidieren: frische Daten laden und Grid neu zeichnen,
         // falls der Kalender gerade sichtbar ist
         await loadCalendarRequests();
@@ -420,16 +411,42 @@ function setupSocket() {
         }
     });
 
-    // SCRUM-303: Erstgenehmigter Antrag wartet auf zweite Freigabe – andere Prüfer informieren
-    socket.on('request:awaiting_second', (data) => {
-        if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'vorgesetzter')) return;
+    // SCRUM-303: ein erstgenehmigter Antrag wartet auf die zweite Freigabe
+    socket.on('request:awaitingSecond', (data) => {
+        if (currentUser.role !== 'admin' && currentUser.role !== 'vorgesetzter') return;
         updateSidebarPendingBadge();
-        if (data.firstReviewerId === currentUser.id) return;
-        showToast('Zweite Freigabe nötig', 'Ein erstgenehmigter Antrag wartet auf die finale Bestätigung', 'info');
-        const ov = document.getElementById('page-requests-overview');
-        if (ov && !ov.classList.contains('hidden') && typeof loadRequestsOverview === 'function') {
-            loadRequestsOverview();
+        const overview = document.getElementById('page-requests-overview');
+        if (overview && !overview.classList.contains('hidden')) loadRequestsOverview();
+        if (!data || data.firstReviewedBy !== currentUser.id) {
+            showToast('Zweite Freigabe nötig', 'Ein Antrag wartet auf die zweite Genehmigung', 'info');
         }
+    });
+
+    // SCRUM-346/349: Schicht- und Tausch-Events
+    socket.on('shift:assigned', () => {
+        showToast('Neue Schicht', 'Du wurdest einer Schicht zugewiesen', 'info');
+        if (typeof refreshShiftViewsIfVisible === 'function') refreshShiftViewsIfVisible();
+    });
+    socket.on('swap:incoming', () => {
+        showToast('Tauschanfrage', 'Ein Kollege bietet dir eine Schicht an', 'info');
+        if (typeof refreshShiftViewsIfVisible === 'function') refreshShiftViewsIfVisible();
+    });
+    socket.on('swap:responded', (data) => {
+        showToast('Tausch aktualisiert', data && data.accepted ? 'Dein Kollege hat angenommen – wartet auf Freigabe' : 'Dein Kollege hat abgelehnt', data && data.accepted ? 'info' : 'error');
+        if (typeof refreshShiftViewsIfVisible === 'function') refreshShiftViewsIfVisible();
+    });
+    socket.on('swap:reviewed', (data) => {
+        showToast('Tausch entschieden', data && data.approved ? 'Der Tausch wurde genehmigt' : 'Der Tausch wurde abgelehnt', data && data.approved ? 'success' : 'error');
+        if (typeof refreshShiftViewsIfVisible === 'function') refreshShiftViewsIfVisible();
+    });
+    socket.on('swap:cancelled', () => {
+        if (typeof refreshShiftViewsIfVisible === 'function') refreshShiftViewsIfVisible();
+    });
+    socket.on('swap:needsReview', () => {
+        if (currentUser.role !== 'admin' && currentUser.role !== 'vorgesetzter') return;
+        if (typeof updateSwapReviewBadge === 'function') updateSwapReviewBadge();
+        showToast('Tausch-Freigabe', 'Ein Schichttausch wartet auf deine Bestätigung', 'info');
+        if (typeof refreshShiftViewsIfVisible === 'function') refreshShiftViewsIfVisible();
     });
 
     socket.on('request:new', () => {
@@ -1703,33 +1720,22 @@ function renderTypeBadge(r) {
     return `<span class="${cls}">${esc(label)}</span>`;
 }
 
-// SCRUM-302: Zeitpunkt einer Genehmigung kompakt (dd.mm.yy hh:mm)
-function formatReviewWhen(dateStr) {
-    if (!dateStr) return '';
-    const d = new Date(dateStr);
-    if (isNaN(d)) return '';
-    const dd = String(d.getDate()).padStart(2, '0');
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const yy = String(d.getFullYear()).slice(-2);
-    const hh = String(d.getHours()).padStart(2, '0');
-    const mi = String(d.getMinutes()).padStart(2, '0');
-    return `${dd}.${mm}.${yy} ${hh}:${mi}`;
-}
-
-// SCRUM-302: Beide Genehmigungsstufen sichtbar machen (wer, wann)
-function renderApproverCell(r) {
+// SCRUM-302: beide Freigaben sichtbar (wer, wann)
+function renderApprovalCell(r) {
     const lines = [];
-    if (r.first_reviewer_name && r.first_reviewer_name.trim()) {
-        lines.push(`<span class="approver-line"><span class="approver-stage stage-1">1.</span>${esc(r.first_reviewer_name)}<span class="approver-when">${formatReviewWhen(r.first_reviewed_at)}</span></span>`);
+    if (r.first_reviewer_name) {
+        const when = r.first_reviewed_at ? ` · ${formatDate(r.first_reviewed_at)}` : '';
+        lines.push(`<div class="approval-line">1. Freigabe: ${esc(r.first_reviewer_name)}${when}</div>`);
     }
-    if (r.reviewer_name && r.reviewer_name.trim()) {
-        const denied = r.status === 'denied';
-        const stageCls = denied ? 'stage-x' : 'stage-2';
-        const stageLbl = denied ? '✕' : '2.';
-        lines.push(`<span class="approver-line"><span class="approver-stage ${stageCls}">${stageLbl}</span>${esc(r.reviewer_name)}<span class="approver-when">${formatReviewWhen(r.reviewed_at)}</span></span>`);
+    if (r.reviewer_name) {
+        const when = r.reviewed_at ? ` · ${formatDate(r.reviewed_at)}` : '';
+        if (r.status === 'denied') {
+            lines.push(`<div class="approval-line approval-line--denied">Abgelehnt: ${esc(r.reviewer_name)}${when}</div>`);
+        } else {
+            lines.push(`<div class="approval-line">2. Freigabe: ${esc(r.reviewer_name)}${when}</div>`);
+        }
     }
-    if (!lines.length) return '<span class="text-muted">–</span>';
-    return `<div class="approver-info">${lines.join('')}</div>`;
+    return lines.length ? lines.join('') : '<span class="text-muted">–</span>';
 }
 
 function renderMyRequests(requests) {
@@ -1755,7 +1761,7 @@ function renderMyRequests(requests) {
                 <td>${renderTypeBadge(r)}</td>
                 <td>${zeitraum}</td>
                 <td><span class="badge ${statusClass}">${statusLabel}</span></td>
-                <td>${renderApproverCell(r)}</td>
+                <td>${renderApprovalCell(r)}</td>
                 <td>${withdrawBtn}</td>
             </tr>
         `;
@@ -2142,21 +2148,30 @@ function renderPendingRequests(requests, skipBadge) {
         const from = formatDate(r.date_from);
         const to = formatDate(r.date_to);
         const zeitraum = from === to ? from : `${from} – ${to}`;
-        const isSecond = r.status === 'first_approved';
-        const stageInfo = isSecond
-            ? `<div class="pending-stage stage-2">2. Freigabe · erste von ${esc(r.first_reviewer_name || '—')}</div>`
-            : `<div class="pending-stage stage-1">1. Freigabe</div>`;
-        const approveLabel = isSecond ? 'Endgültig genehmigen' : 'Genehmigen';
+        const isStage2 = r.status === 'first_approved';
+        const stageBadge = isStage2
+            ? '<span class="badge badge-first_approved stage-pill">Stufe 2 · 2. Freigabe</span>'
+            : '<span class="badge badge-pending stage-pill">Stufe 1</span>';
+        const firstInfo = (isStage2 && r.first_reviewer_name)
+            ? `<div class="approval-line">1. Freigabe: ${esc(r.first_reviewer_name)}${r.first_reviewed_at ? ' · ' + formatDate(r.first_reviewed_at) : ''}</div>`
+            : '';
+        const blockedSelf = isStage2 && currentUser && r.first_reviewed_by === currentUser.id;
+        let actions;
+        if (blockedSelf) {
+            actions = '<span class="text-muted">Du warst 1. Genehmiger – zweite Freigabe muss von einer anderen Person kommen.</span>';
+        } else {
+            const approveLabel = isStage2 ? 'Endgültig genehmigen' : 'Genehmigen (1/2)';
+            actions = `
+                <button class="btn btn-sm btn-approve" onclick="window._reviewRequest(${r.id}, 'approved')">${approveLabel}</button>
+                <button class="btn btn-sm btn-deny" onclick="window._reviewRequest(${r.id}, 'denied')">Ablehnen</button>`;
+        }
         return `
             <tr>
-                <td data-label="Mitarbeiter"><strong>${esc(r.user_name)}</strong>${stageInfo}</td>
+                <td data-label="Mitarbeiter"><strong>${esc(r.user_name)}</strong>${stageBadge}${firstInfo}</td>
                 <td data-label="Typ">${renderTypeBadge(r)}</td>
                 <td data-label="Zeitraum">${zeitraum}</td>
                 <td class="col-hide-sm" data-label="Notiz">${r.note ? esc(r.note) : '<span class="text-muted">–</span>'}</td>
-                <td class="actions-cell">
-                    <button class="btn btn-sm btn-approve" onclick="window._reviewRequest(${r.id}, 'approved')">${approveLabel}</button>
-                    <button class="btn btn-sm btn-deny" onclick="window._reviewRequest(${r.id}, 'denied')">Ablehnen</button>
-                </td>
+                <td class="actions-cell">${actions}</td>
             </tr>
         `;
     }).join('');
@@ -2205,7 +2220,7 @@ function renderAllRequests(requests) {
                 <td data-label="Typ">${renderTypeBadge(r)}</td>
                 <td data-label="Zeitraum">${zeitraum}</td>
                 <td data-label="Status"><span class="badge ${statusClass}">${statusLabel}</span></td>
-                <td class="col-hide-md" data-label="Bearbeiter">${renderApproverCell(r)}</td>
+                <td class="col-hide-md" data-label="Bearbeiter">${renderApprovalCell(r)}</td>
                 <td class="col-hide-sm" data-label="Eingereicht">${eingereicht}</td>
             </tr>
         `;
@@ -2213,8 +2228,17 @@ function renderAllRequests(requests) {
 }
 
 window._reviewRequest = async function(id, status) {
-    const label = status === 'approved' ? 'genehmigen' : 'ablehnen';
-    if (!confirm(`Antrag wirklich ${label}?`)) return;
+    const r = pendingRequestsData.find(x => x.id === id);
+    const isStage2 = r && r.status === 'first_approved';
+    let msg;
+    if (status === 'approved') {
+        msg = isStage2
+            ? 'Antrag endgültig genehmigen (2. Freigabe)?'
+            : 'Erste Freigabe erteilen? Der Antrag geht danach zur zweiten Genehmigung.';
+    } else {
+        msg = 'Antrag wirklich ablehnen?';
+    }
+    if (!confirm(msg)) return;
     try {
         await apiFetch(`/requests/${id}/review`, {
             method: 'PUT',
@@ -2854,12 +2878,11 @@ const REPORT_REASON_LABELS = {
 };
 const REPORT_STATUS_BADGE = {
     approved: 'badge-active',
-    first_approved: 'badge-role',
     pending: 'badge-role',
     denied: 'badge-inactive'
 };
 const REPORT_STATUS_LABEL = {
-    approved: 'Genehmigt', first_approved: 'Erstgenehmigt', pending: 'Ausstehend', denied: 'Abgelehnt'
+    approved: 'Genehmigt', pending: 'Ausstehend', denied: 'Abgelehnt'
 };
 
 async function loadReportsPage() {
@@ -3443,7 +3466,7 @@ function renderCalendar() {
                 label = reasonLabels[absence.reason] || label;
             }
             if (absence.status === 'pending') label += ' (offen)';
-            else if (absence.status === 'first_approved') label += ' (1. Freigabe)';
+            else if (absence.status === 'first_approved') label += ' (1/2)';
         }
 
         // ARIA: Wochentag + Datum lesen
@@ -3506,3 +3529,413 @@ btnCalToday?.addEventListener('click', () => {
 });
 
 registerRoute('calendar', { pageId: 'page-calendar', onEnter: loadCalendar });
+
+// ── Schichtplan (SCRUM-346/349) ─────────────────────────────
+
+const swapStatusLabels = {
+    pending: 'Wartet auf Kollege',
+    accepted: 'Wartet auf Freigabe',
+    approved: 'Genehmigt',
+    denied: 'Abgelehnt',
+    rejected: 'Vom Kollegen abgelehnt',
+    cancelled: 'Zurückgezogen',
+};
+
+let myShiftsData = [];
+let shiftPlanUsers = [];
+let shiftGroupsLoaded = false;
+
+function shiftDateLabel(iso) {
+    const d = parseDateLocal(iso);
+    if (!d) return esc(iso);
+    const yy = String(d.getFullYear()).slice(-2);
+    return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${yy}`;
+}
+
+function shiftWhen(s) {
+    return `${shiftDateLabel(s.shift_date)} · ${esc(s.start_time)}–${esc(s.end_time)}`;
+}
+
+function setShiftTab(name) {
+    document.querySelectorAll('#page-schichtplan .req-tab').forEach(t => {
+        const active = t.dataset.shifttab === name;
+        t.classList.toggle('active', active);
+        t.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    ['my', 'plan', 'review'].forEach(p => {
+        const el = document.getElementById(`shift-panel-${p}`);
+        if (el) el.classList.toggle('hidden', p !== name);
+    });
+    if (name === 'plan') loadShiftPlan();
+    if (name === 'review') loadSwapReview();
+}
+
+document.querySelectorAll('#page-schichtplan .req-tab[data-shifttab]').forEach(tab => {
+    tab.addEventListener('click', () => setShiftTab(tab.dataset.shifttab));
+});
+
+async function loadSchichtplan() {
+    const isManager = currentUser.role === 'admin' || currentUser.role === 'vorgesetzter';
+    document.querySelectorAll('#page-schichtplan .req-tab[data-roles]').forEach(t => {
+        t.classList.toggle('hidden', !isManager);
+    });
+    setShiftTab('my');
+
+    const from = document.getElementById('shift-plan-from');
+    const to = document.getElementById('shift-plan-to');
+    if (from && !from.value) {
+        const t = new Date();
+        const end = new Date(); end.setDate(end.getDate() + 14);
+        from.value = toIsoLocal(t);
+        to.value = toIsoLocal(end);
+    }
+
+    if (isManager && currentUser.role === 'admin' && !shiftGroupsLoaded) {
+        try {
+            const groups = await apiFetch('/admin/groups');
+            const sel = document.getElementById('cs-group');
+            sel.innerHTML = '<option value="">– Keine –</option>' +
+                groups.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('');
+            shiftGroupsLoaded = true;
+        } catch {}
+    }
+
+    await Promise.all([loadMyShifts(), loadIncomingSwaps(), loadOutgoingSwaps()]);
+    if (isManager) updateSwapReviewBadge();
+}
+
+async function loadMyShifts() {
+    const list = document.getElementById('shift-my-list');
+    const empty = document.getElementById('shift-my-empty');
+    try {
+        myShiftsData = await apiFetch('/shifts/my');
+    } catch (err) {
+        list.innerHTML = `<p class="text-muted">Fehler: ${esc(err.message)}</p>`;
+        return;
+    }
+    if (!myShiftsData.length) {
+        list.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+    }
+    empty.classList.add('hidden');
+    list.innerHTML = myShiftsData.map(s => {
+        let swapInfo = '';
+        let action = `<button class="btn btn-sm" onclick="window._openSwapModal(${s.assignment_id})">Tauschen</button>`;
+        if (s.swap_status === 'pending' || s.swap_status === 'accepted') {
+            swapInfo = `<div class="approval-line">Tausch an ${esc(s.swap_to_name)}: ${swapStatusLabels[s.swap_status]}</div>`;
+            action = '';
+        }
+        return `
+            <div class="shift-card">
+                <div class="shift-card-head">
+                    <strong>${esc(s.title || 'Schicht')}</strong>
+                    <span class="shift-when">${shiftWhen(s)}</span>
+                    ${s.group_name ? `<span class="shift-group">${esc(s.group_name)}</span>` : ''}
+                </div>
+                ${swapInfo}
+                <div class="shift-card-actions">${action}</div>
+            </div>`;
+    }).join('');
+}
+
+async function loadIncomingSwaps() {
+    const list = document.getElementById('shift-incoming-list');
+    const empty = document.getElementById('shift-incoming-empty');
+    let rows;
+    try {
+        rows = await apiFetch('/shifts/swaps/incoming');
+    } catch { return; }
+    if (!rows.length) { list.innerHTML = ''; empty.classList.remove('hidden'); return; }
+    empty.classList.add('hidden');
+    list.innerHTML = rows.map(r => `
+        <div class="shift-card">
+            <div class="shift-card-head">
+                <strong>${esc(r.from_name)}</strong> bietet dir
+                <span class="shift-when">${esc(r.title || 'Schicht')} · ${shiftWhen(r)}</span>
+            </div>
+            <div class="shift-card-actions">
+                <button class="btn btn-sm btn-approve" onclick="window._respondSwap(${r.id}, true)">Annehmen</button>
+                <button class="btn btn-sm btn-deny" onclick="window._respondSwap(${r.id}, false)">Ablehnen</button>
+            </div>
+        </div>`).join('');
+}
+
+async function loadOutgoingSwaps() {
+    const list = document.getElementById('shift-outgoing-list');
+    const empty = document.getElementById('shift-outgoing-empty');
+    let rows;
+    try {
+        rows = await apiFetch('/shifts/swaps/outgoing');
+    } catch { return; }
+    if (!rows.length) { list.innerHTML = ''; empty.classList.remove('hidden'); return; }
+    empty.classList.add('hidden');
+    list.innerHTML = rows.map(r => {
+        const cancel = (r.status === 'pending' || r.status === 'accepted')
+            ? `<button class="btn btn-sm btn-withdraw" onclick="window._cancelSwap(${r.id})">Zurückziehen</button>` : '';
+        return `
+            <div class="shift-card">
+                <div class="shift-card-head">
+                    <strong>${esc(r.title || 'Schicht')}</strong>
+                    <span class="shift-when">${shiftDateLabel(r.shift_date)}</span>
+                    → ${esc(r.to_name)}
+                    <span class="badge badge-${r.status === 'approved' ? 'approved' : (r.status === 'denied' || r.status === 'rejected' ? 'denied' : 'pending')}">${swapStatusLabels[r.status] || r.status}</span>
+                </div>
+                <div class="shift-card-actions">${cancel}</div>
+            </div>`;
+    }).join('');
+}
+
+async function loadShiftPlan() {
+    const list = document.getElementById('shift-plan-list');
+    const empty = document.getElementById('shift-plan-empty');
+    const from = document.getElementById('shift-plan-from').value;
+    const to = document.getElementById('shift-plan-to').value;
+    if (!from || !to) return;
+    list.innerHTML = '<p class="text-muted">Lädt…</p>';
+    empty.classList.add('hidden');
+
+    try {
+        if (!shiftPlanUsers.length) shiftPlanUsers = await apiFetch('/admin/users');
+    } catch { shiftPlanUsers = []; }
+
+    let shifts;
+    try {
+        shifts = await apiFetch(`/shifts/plan?from=${from}&to=${to}`);
+    } catch (err) {
+        list.innerHTML = `<p class="text-muted">Fehler: ${esc(err.message)}</p>`;
+        return;
+    }
+    if (!shifts.length) { list.innerHTML = ''; empty.classList.remove('hidden'); return; }
+
+    list.innerHTML = shifts.map(s => {
+        const assignedIds = new Set(s.assignments.map(a => a.user_id));
+        const options = shiftPlanUsers
+            .filter(u => !assignedIds.has(u.id))
+            .map(u => `<option value="${u.id}">${esc(u.first_name)} ${esc(u.last_name)}</option>`).join('');
+        const chips = s.assignments.map(a => `
+            <span class="shift-chip ${a.unavailable ? 'shift-chip--warn' : ''}" ${a.unavailable ? `title="${esc(a.unavailable)}"` : ''}>
+                ${esc(a.name)}${a.unavailable ? ' ⚠' : ''}
+                <button class="shift-chip-x" aria-label="Entfernen" onclick="window._unassignShift(${s.id}, ${a.user_id})">×</button>
+            </span>`).join('') || '<span class="text-muted">Niemand eingeplant</span>';
+        const warnHtml = s.warnings.map(w => `<span class="shift-warning">⚠ ${esc(w)}</span>`).join('');
+        return `
+            <div class="shift-card ${s.understaffed ? 'shift-card--warn' : ''}">
+                <div class="shift-card-head">
+                    <strong>${esc(s.title || 'Schicht')}</strong>
+                    <span class="shift-when">${shiftWhen(s)}</span>
+                    ${s.group_name ? `<span class="shift-group">${esc(s.group_name)}</span>` : ''}
+                    <span class="shift-staff">${s.assigned_count}/${s.min_staff}</span>
+                    <button class="btn btn-sm btn-deny shift-del" onclick="window._deleteShift(${s.id})">Löschen</button>
+                </div>
+                ${warnHtml ? `<div class="shift-warnings">${warnHtml}</div>` : ''}
+                <div class="shift-assignees">${chips}</div>
+                <div class="shift-assign-row">
+                    <select id="assign-sel-${s.id}" ${options ? '' : 'disabled'}>${options || '<option value="">Keine verfügbaren Mitarbeiter</option>'}</select>
+                    <button class="btn btn-sm" onclick="window._assignShift(${s.id})" ${options ? '' : 'disabled'}>Hinzufügen</button>
+                </div>
+            </div>`;
+    }).join('');
+}
+
+async function loadSwapReview() {
+    const list = document.getElementById('shift-review-list');
+    const empty = document.getElementById('shift-review-empty');
+    let rows;
+    try {
+        rows = await apiFetch('/shifts/swaps/review');
+    } catch (err) {
+        list.innerHTML = `<p class="text-muted">Fehler: ${esc(err.message)}</p>`;
+        return;
+    }
+    updateSwapReviewBadge(rows.length);
+    if (!rows.length) { list.innerHTML = ''; empty.classList.remove('hidden'); return; }
+    empty.classList.add('hidden');
+    list.innerHTML = rows.map(r => `
+        <div class="shift-card">
+            <div class="shift-card-head">
+                <strong>${esc(r.from_name)}</strong> → <strong>${esc(r.to_name)}</strong>
+                <span class="shift-when">${esc(r.title || 'Schicht')} · ${shiftWhen(r)}</span>
+            </div>
+            <div class="shift-card-actions">
+                <button class="btn btn-sm btn-approve" onclick="window._reviewSwap(${r.id}, true)">Genehmigen</button>
+                <button class="btn btn-sm btn-deny" onclick="window._reviewSwap(${r.id}, false)">Ablehnen</button>
+            </div>
+        </div>`).join('');
+}
+
+async function updateSwapReviewBadge(count) {
+    if (currentUser.role !== 'admin' && currentUser.role !== 'vorgesetzter') return;
+    if (count === undefined) {
+        try { count = (await apiFetch('/shifts/swaps/review')).length; } catch { return; }
+    }
+    for (const id of ['shift-review-badge', 'sidebar-shift-badge']) {
+        const b = document.getElementById(id);
+        if (!b) continue;
+        b.textContent = count;
+        b.classList.toggle('hidden', count === 0);
+    }
+}
+
+window._assignShift = async function(shiftId) {
+    const sel = document.getElementById(`assign-sel-${shiftId}`);
+    const userId = sel && sel.value;
+    if (!userId) return;
+    try {
+        const res = await apiFetch(`/shifts/${shiftId}/assign`, { method: 'POST', body: JSON.stringify({ userId: parseInt(userId) }) });
+        if (res.warning) showToast('Eingeplant – mit Warnung', res.warning, 'info');
+        else toast.success('Eingeplant');
+        loadShiftPlan();
+    } catch (err) { toast.error('Fehler', err.message); }
+};
+
+window._unassignShift = async function(shiftId, userId) {
+    try {
+        await apiFetch(`/shifts/${shiftId}/assign/${userId}`, { method: 'DELETE' });
+        loadShiftPlan();
+    } catch (err) { toast.error('Fehler', err.message); }
+};
+
+window._deleteShift = async function(shiftId) {
+    const ok = await confirmModal({ title: 'Schicht löschen?', message: 'Alle Zuweisungen werden entfernt.', confirmLabel: 'Löschen', confirmStyle: 'danger' });
+    if (!ok) return;
+    try {
+        await apiFetch(`/shifts/${shiftId}`, { method: 'DELETE' });
+        toast.success('Schicht gelöscht');
+        loadShiftPlan();
+    } catch (err) { toast.error('Fehler', err.message); }
+};
+
+window._openSwapModal = async function(assignmentId) {
+    const s = myShiftsData.find(x => x.assignment_id === assignmentId);
+    if (!s) return;
+    document.getElementById('offer-swap-error').classList.add('hidden');
+    document.getElementById('offer-swap-info').textContent = `${s.title || 'Schicht'} – ${shiftDateLabel(s.shift_date)} (${s.start_time}–${s.end_time})`;
+    const sel = document.getElementById('os-colleague');
+    sel.innerHTML = '<option value="">– Lädt… –</option>';
+    sel.dataset.assignmentId = assignmentId;
+    openModalA11y('modal-offer-swap');
+    try {
+        const colleagues = await apiFetch(`/shifts/colleagues?shiftId=${s.id}`);
+        sel.innerHTML = colleagues.length
+            ? colleagues.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')
+            : '<option value="">Keine verfügbaren Kollegen</option>';
+    } catch (err) {
+        sel.innerHTML = '<option value="">Fehler beim Laden</option>';
+    }
+};
+
+document.getElementById('btn-submit-swap')?.addEventListener('click', async () => {
+    const sel = document.getElementById('os-colleague');
+    const assignmentId = parseInt(sel.dataset.assignmentId);
+    const toUserId = parseInt(sel.value);
+    const errEl = document.getElementById('offer-swap-error');
+    if (!toUserId) { errEl.textContent = 'Bitte einen Kollegen wählen.'; errEl.classList.remove('hidden'); return; }
+    try {
+        await apiFetch('/shifts/swaps', { method: 'POST', body: JSON.stringify({ assignmentId, toUserId }) });
+        closeModalA11y('modal-offer-swap');
+        toast.success('Tausch angeboten', 'Der Kollege wurde benachrichtigt.');
+        loadMyShifts();
+        loadOutgoingSwaps();
+    } catch (err) { errEl.textContent = err.message; errEl.classList.remove('hidden'); }
+});
+
+window._respondSwap = async function(id, accept) {
+    try {
+        await apiFetch(`/shifts/swaps/${id}/respond`, { method: 'POST', body: JSON.stringify({ accept }) });
+        toast.success(accept ? 'Angenommen – wartet auf Freigabe' : 'Abgelehnt');
+        loadIncomingSwaps();
+        loadMyShifts();
+    } catch (err) { toast.error('Fehler', err.message); }
+};
+
+window._cancelSwap = async function(id) {
+    try {
+        await apiFetch(`/shifts/swaps/${id}/cancel`, { method: 'POST' });
+        loadOutgoingSwaps();
+        loadMyShifts();
+    } catch (err) { toast.error('Fehler', err.message); }
+};
+
+window._reviewSwap = async function(id, approve) {
+    const ok = await confirmModal({
+        title: approve ? 'Tausch genehmigen?' : 'Tausch ablehnen?',
+        message: approve ? 'Die Schicht wird dem Kollegen zugewiesen.' : '',
+        confirmLabel: approve ? 'Genehmigen' : 'Ablehnen',
+        confirmStyle: approve ? 'primary' : 'danger',
+    });
+    if (!ok) return;
+    try {
+        await apiFetch(`/shifts/swaps/${id}/review`, { method: 'POST', body: JSON.stringify({ approve }) });
+        toast.success(approve ? 'Tausch genehmigt' : 'Tausch abgelehnt');
+        loadSwapReview();
+    } catch (err) { toast.error('Fehler', err.message); }
+};
+
+function openCreateShiftModal() {
+    document.getElementById('create-shift-error').classList.add('hidden');
+    document.getElementById('create-shift-success').classList.add('hidden');
+    document.getElementById('cs-title').value = '';
+    document.getElementById('cs-date').value = document.getElementById('shift-plan-from').value || '';
+    document.getElementById('cs-start').value = '';
+    document.getElementById('cs-end').value = '';
+    document.getElementById('cs-minstaff').value = '1';
+    document.getElementById('cs-group').value = '';
+    openModalA11y('modal-create-shift');
+}
+
+document.getElementById('btn-open-create-shift')?.addEventListener('click', openCreateShiftModal);
+document.getElementById('btn-shift-plan-load')?.addEventListener('click', loadShiftPlan);
+
+document.getElementById('btn-submit-shift')?.addEventListener('click', async () => {
+    const errEl = document.getElementById('create-shift-error');
+    const okEl = document.getElementById('create-shift-success');
+    errEl.classList.add('hidden'); okEl.classList.add('hidden');
+
+    const body = {
+        title: document.getElementById('cs-title').value.trim(),
+        date: document.getElementById('cs-date').value,
+        startTime: document.getElementById('cs-start').value,
+        endTime: document.getElementById('cs-end').value,
+        groupId: document.getElementById('cs-group').value || null,
+        minStaff: parseInt(document.getElementById('cs-minstaff').value) || 0,
+    };
+    if (!body.date || !body.startTime || !body.endTime) {
+        errEl.textContent = 'Datum, Beginn und Ende sind erforderlich.';
+        errEl.classList.remove('hidden');
+        return;
+    }
+    const btn = document.getElementById('btn-submit-shift');
+    btn.disabled = true;
+    try {
+        await apiFetch('/shifts', { method: 'POST', body: JSON.stringify(body) });
+        okEl.textContent = 'Schicht erstellt.';
+        okEl.classList.remove('hidden');
+        loadShiftPlan();
+        setTimeout(() => closeModalA11y('modal-create-shift'), 900);
+    } catch (err) {
+        errEl.textContent = err.message;
+        errEl.classList.remove('hidden');
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+initModal('modal-create-shift');
+initModal('modal-offer-swap');
+
+function refreshShiftViewsIfVisible() {
+    const page = document.getElementById('page-schichtplan');
+    if (!page || page.classList.contains('hidden')) return;
+    loadMyShifts();
+    loadIncomingSwaps();
+    loadOutgoingSwaps();
+    if (!document.getElementById('shift-panel-plan').classList.contains('hidden')) loadShiftPlan();
+    if (!document.getElementById('shift-panel-review').classList.contains('hidden')) loadSwapReview();
+}
+
+registerRoute('schichtplan', {
+    pageId: 'page-schichtplan',
+    onEnter: loadSchichtplan,
+    roles: ['admin', 'vorgesetzter', 'arbeiter'],
+});

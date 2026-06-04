@@ -65,7 +65,7 @@ CREATE TABLE requests (
     note TEXT DEFAULT NULL,
     -- Anlass nur bei type='sonderurlaub' relevant; bei 'sonstiges' MUSS note gefüllt sein (Freitext)
     reason ENUM('hochzeit','geburt','trauerfall','umzug','sonstiges') DEFAULT NULL,
-    -- 4-Augen-Prinzip: pending -> first_approved -> approved (Ablehnung jederzeit -> denied)
+    -- SCRUM-292: 4-Augen-Prinzip. pending -> first_approved -> approved; Ablehnung jederzeit -> denied.
     status ENUM('pending','first_approved','approved','denied') DEFAULT 'pending',
     first_reviewed_by INT DEFAULT NULL,
     first_reviewed_at DATETIME DEFAULT NULL,
@@ -79,7 +79,10 @@ CREATE TABLE requests (
 );
 
 -- Migration für bestehende Datenbanken (separat ausführen, falls die Tabelle schon existiert):
--- siehe migrate_4eyes_requests.sql
+-- ALTER TABLE requests
+--   MODIFY COLUMN type ENUM('urlaub','gleitzeit','homeoffice','krank','sonderurlaub') NOT NULL,
+--   ADD COLUMN reason ENUM('hochzeit','geburt','trauerfall','umzug','sonstiges') DEFAULT NULL AFTER note;
+-- SCRUM-304: 4-Augen-Migration siehe migrations/scrum292_4augen.sql
 
 CREATE TABLE devices (
     id VARCHAR(50) PRIMARY KEY,
@@ -121,6 +124,50 @@ CREATE TABLE corrections (
     FOREIGN KEY (stamp_id) REFERENCES timestamps_log(id) ON DELETE SET NULL,
     FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_corr_status (user_id, status)
+);
+
+-- SCRUM-346/349: Schichtplan
+CREATE TABLE shifts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(100) DEFAULT NULL,
+    shift_date DATE NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    group_id INT DEFAULT NULL,
+    min_staff INT NOT NULL DEFAULT 1,
+    created_by INT DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (group_id) REFERENCES groups_table(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_shift_date (shift_date)
+);
+
+CREATE TABLE shift_assignments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    shift_id INT NOT NULL,
+    user_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_shift_user (shift_id, user_id),
+    FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_assign_user (user_id)
+);
+
+CREATE TABLE shift_swaps (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    assignment_id INT NOT NULL,
+    from_user_id INT NOT NULL,
+    to_user_id INT NOT NULL,
+    status ENUM('pending','accepted','approved','denied','rejected','cancelled') DEFAULT 'pending',
+    reviewed_by INT DEFAULT NULL,
+    reviewed_at DATETIME DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (assignment_id) REFERENCES shift_assignments(id) ON DELETE CASCADE,
+    FOREIGN KEY (from_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (to_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_swap_status (status),
+    INDEX idx_swap_to (to_user_id, status)
 );
 
 INSERT INTO groups_table (name) VALUES ('Allgemein'), ('Entwicklung'), ('Verwaltung');

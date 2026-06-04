@@ -79,23 +79,22 @@ router.get('/my', auth, async (req, res) => {
 
 router.get('/pending', auth, role('vorgesetzter', 'admin'), async (req, res) => {
     try {
-        const selectCols = `r.*, CONCAT(u.first_name, ' ', u.last_name) as user_name, u.email,
-                            CONCAT(fr.first_name, ' ', fr.last_name) as first_reviewer_name`;
-        const joins = `FROM requests r JOIN users u ON r.user_id = u.id
-                       LEFT JOIN users fr ON r.first_reviewed_by = fr.id`;
-
+        const baseSelect = `SELECT r.*, CONCAT(u.first_name, ' ', u.last_name) as user_name, u.email,
+                            CONCAT(fr.first_name, ' ', fr.last_name) as first_reviewer_name
+                            FROM requests r
+                            JOIN users u ON r.user_id = u.id
+                            LEFT JOIN users fr ON r.first_reviewed_by = fr.id`;
         let query, params;
         if (req.user.role === 'admin') {
-            query = `SELECT ${selectCols} ${joins}
-                     WHERE r.status = 'pending'
-                        OR (r.status = 'first_approved' AND (r.first_reviewed_by IS NULL OR r.first_reviewed_by <> ?))
-                     ORDER BY r.created_at ASC`;
-            params = [req.user.id];
+            query = `${baseSelect} WHERE r.status IN ('pending','first_approved')
+                     ORDER BY FIELD(r.status,'pending','first_approved'), r.created_at ASC`;
+            params = [];
         } else {
-            query = `SELECT ${selectCols} ${joins}
+            // Stufe 1: eigene Mitarbeiter. Stufe 2: alle erstgenehmigten, bei denen man nicht selbst Stufe 1 war.
+            query = `${baseSelect}
                      WHERE (r.status = 'pending' AND u.supervisor_id = ?)
-                        OR (r.status = 'first_approved' AND r.first_reviewed_by <> ?)
-                     ORDER BY r.created_at ASC`;
+                        OR (r.status = 'first_approved' AND (r.first_reviewed_by IS NULL OR r.first_reviewed_by <> ?))
+                     ORDER BY FIELD(r.status,'pending','first_approved'), r.created_at ASC`;
             params = [req.user.id, req.user.id];
         }
         const [rows] = await db.query(query, params);
@@ -108,24 +107,19 @@ router.get('/pending', auth, role('vorgesetzter', 'admin'), async (req, res) => 
 
 router.get('/all', auth, role('vorgesetzter', 'admin'), async (req, res) => {
     try {
+        const baseSelect = `SELECT r.*, CONCAT(u.first_name, ' ', u.last_name) as user_name,
+                            CONCAT(rv.first_name, ' ', rv.last_name) as reviewer_name,
+                            CONCAT(fr.first_name, ' ', fr.last_name) as first_reviewer_name
+                            FROM requests r
+                            JOIN users u ON r.user_id = u.id
+                            LEFT JOIN users rv ON r.reviewed_by = rv.id
+                            LEFT JOIN users fr ON r.first_reviewed_by = fr.id`;
         let query, params;
         if (req.user.role === 'admin') {
-            query = `SELECT r.*, CONCAT(u.first_name, ' ', u.last_name) as user_name,
-                     CONCAT(rv.first_name, ' ', rv.last_name) as reviewer_name,
-                     CONCAT(fr.first_name, ' ', fr.last_name) as first_reviewer_name
-                     FROM requests r JOIN users u ON r.user_id = u.id
-                     LEFT JOIN users rv ON r.reviewed_by = rv.id
-                     LEFT JOIN users fr ON r.first_reviewed_by = fr.id
-                     ORDER BY r.created_at DESC LIMIT 100`;
+            query = `${baseSelect} ORDER BY r.created_at DESC LIMIT 100`;
             params = [];
         } else {
-            query = `SELECT r.*, CONCAT(u.first_name, ' ', u.last_name) as user_name,
-                     CONCAT(rv.first_name, ' ', rv.last_name) as reviewer_name,
-                     CONCAT(fr.first_name, ' ', fr.last_name) as first_reviewer_name
-                     FROM requests r JOIN users u ON r.user_id = u.id
-                     LEFT JOIN users rv ON r.reviewed_by = rv.id
-                     LEFT JOIN users fr ON r.first_reviewed_by = fr.id
-                     WHERE u.supervisor_id = ? ORDER BY r.created_at DESC LIMIT 100`;
+            query = `${baseSelect} WHERE u.supervisor_id = ? ORDER BY r.created_at DESC LIMIT 100`;
             params = [req.user.id];
         }
         const [rows] = await db.query(query, params);
@@ -141,69 +135,56 @@ router.put('/:id/review', auth, role('vorgesetzter', 'admin'), async (req, res) 
         const { status } = req.body;
         if (!['approved', 'denied'].includes(status)) return res.status(400).json({ error: 'Ungültiger Status' });
 
-        const [requests] = await db.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
-        if (!requests.length) return res.status(404).json({ error: 'Antrag nicht gefunden' });
+        const [requests] = await db.query(
+            "SELECT * FROM requests WHERE id = ? AND status IN ('pending','first_approved')",
+            [req.params.id]
+        );
+        if (!requests.length) return res.status(404).json({ error: 'Antrag nicht gefunden oder bereits bearbeitet' });
 
         const request = requests[0];
-        if (!['pending', 'first_approved'].includes(request.status)) {
-            return res.status(409).json({ error: 'Antrag wurde bereits abgeschlossen' });
-        }
-
         const reviewerName = `${req.user.firstName} ${req.user.lastName}`;
         const io = req.app.get('io');
+        const notifyUser = (payload) => io && io.to(`user-${request.user_id}`).emit('request:reviewed', { id: request.id, ...payload });
 
         if (request.status === 'pending') {
+            // Stufe 1 – nur der direkte Vorgesetzte (oder Admin)
             if (req.user.role === 'vorgesetzter') {
                 const [user] = await db.query('SELECT supervisor_id FROM users WHERE id = ?', [request.user_id]);
-                if (user[0]?.supervisor_id !== req.user.id) {
-                    return res.status(403).json({ error: 'Nicht dein Mitarbeiter' });
-                }
+                if (user[0]?.supervisor_id !== req.user.id) return res.status(403).json({ error: 'Nicht dein Mitarbeiter' });
             }
 
             if (status === 'denied') {
-                const [r] = await db.query(
-                    "UPDATE requests SET status = 'denied', reviewed_by = ?, reviewed_at = NOW() WHERE id = ? AND status = 'pending'",
+                await db.query(
+                    "UPDATE requests SET status = 'denied', reviewed_by = ?, reviewed_at = NOW() WHERE id = ?",
                     [req.user.id, request.id]
                 );
-                if (!r.affectedRows) return res.status(409).json({ error: 'Antrag wurde bereits abgeschlossen' });
-                if (io) io.to(`user-${request.user_id}`).emit('request:reviewed', { id: request.id, status: 'denied', stage: 'first', reviewerName });
+                notifyUser({ status: 'denied', reviewerName });
                 return res.json({ message: 'Antrag abgelehnt' });
             }
 
-            const [r] = await db.query(
-                "UPDATE requests SET status = 'first_approved', first_reviewed_by = ?, first_reviewed_at = NOW() WHERE id = ? AND status = 'pending'",
+            await db.query(
+                "UPDATE requests SET status = 'first_approved', first_reviewed_by = ?, first_reviewed_at = NOW() WHERE id = ?",
                 [req.user.id, request.id]
             );
-            if (!r.affectedRows) return res.status(409).json({ error: 'Antrag wurde bereits abgeschlossen' });
-
+            notifyUser({ status: 'first_approved', reviewerName });
             if (io) {
-                io.to(`user-${request.user_id}`).emit('request:reviewed', { id: request.id, status: 'first_approved', stage: 'first', reviewerName });
-                io.to('admins').to('supervisors').emit('request:awaiting_second', { id: request.id, firstReviewerId: req.user.id });
+                io.to('admins').to('supervisors').emit('request:awaitingSecond', { id: request.id, firstReviewedBy: req.user.id });
             }
             return res.json({ message: 'Erste Genehmigung erteilt – wartet auf zweite Freigabe' });
         }
 
+        // Stufe 2 (first_approved) – zweiter Genehmiger, nicht dieselbe Person
         if (request.first_reviewed_by === req.user.id) {
             return res.status(403).json({ error: 'Du hast diesen Antrag bereits in der ersten Stufe bearbeitet' });
         }
 
-        if (status === 'denied') {
-            const [r] = await db.query(
-                "UPDATE requests SET status = 'denied', reviewed_by = ?, reviewed_at = NOW() WHERE id = ? AND status = 'first_approved' AND first_reviewed_by <> ?",
-                [req.user.id, request.id, req.user.id]
-            );
-            if (!r.affectedRows) return res.status(409).json({ error: 'Antrag wurde bereits abgeschlossen' });
-            if (io) io.to(`user-${request.user_id}`).emit('request:reviewed', { id: request.id, status: 'denied', stage: 'final', reviewerName });
-            return res.json({ message: 'Antrag abgelehnt' });
-        }
-
-        const [r] = await db.query(
-            "UPDATE requests SET status = 'approved', reviewed_by = ?, reviewed_at = NOW() WHERE id = ? AND status = 'first_approved' AND first_reviewed_by <> ?",
-            [req.user.id, request.id, req.user.id]
+        const finalStatus = status === 'approved' ? 'approved' : 'denied';
+        await db.query(
+            'UPDATE requests SET status = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?',
+            [finalStatus, req.user.id, request.id]
         );
-        if (!r.affectedRows) return res.status(409).json({ error: 'Antrag wurde bereits abgeschlossen' });
-        if (io) io.to(`user-${request.user_id}`).emit('request:reviewed', { id: request.id, status: 'approved', stage: 'final', reviewerName });
-        return res.json({ message: 'Antrag endgültig genehmigt' });
+        notifyUser({ status: finalStatus, reviewerName });
+        res.json({ message: finalStatus === 'approved' ? 'Antrag endgültig genehmigt' : 'Antrag abgelehnt' });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Serverfehler' });

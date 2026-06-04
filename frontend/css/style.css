@@ -63,8 +63,6 @@
     --badge-approved-text: #166534;
     --badge-denied-bg:     #fee2e2;
     --badge-denied-text:   #991b1b;
-    --badge-partial-bg:    #e0e7ff;
-    --badge-partial-text:  #3730a3;
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -115,8 +113,6 @@
     --badge-approved-text: #1e3a8a;
     --badge-denied-bg:     #fce7f3;   /* Rotviolett statt Amber – sonst = pending */
     --badge-denied-text:   #9d174d;
-    --badge-partial-bg:    #ede9fe;
-    --badge-partial-text:  #5b21b6;
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -167,8 +163,6 @@
     --badge-approved-text: #075985;
     --badge-denied-bg:     #fce7f3;   /* Rotviolett statt Gold – sonst = pending */
     --badge-denied-text:   #9d174d;
-    --badge-partial-bg:    #ccfbf1;
-    --badge-partial-text:  #115e59;
 }
 
 body {
@@ -1278,26 +1272,12 @@ body.modal-open { overflow: hidden; }
 
 .badge-pending  { background: var(--badge-pending-bg);  color: var(--badge-pending-text); }
 .badge-approved { background: var(--badge-approved-bg); color: var(--badge-approved-text); }
-.badge-first_approved { background: var(--badge-partial-bg); color: var(--badge-partial-text); }
-
-/* SCRUM-302: Genehmiger-Anzeige (beide Stufen) */
-.approver-info { display: flex; flex-direction: column; gap: 2px; }
-.approver-line { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; line-height: 1.3; flex-wrap: wrap; }
-.approver-stage {
-    flex: 0 0 auto; min-width: 18px; height: 18px; padding: 0 4px;
-    display: inline-flex; align-items: center; justify-content: center;
-    border-radius: 5px; font-size: 0.72rem; font-weight: 700;
-}
-.approver-stage.stage-1 { background: var(--badge-partial-bg); color: var(--badge-partial-text); }
-.approver-stage.stage-2 { background: var(--badge-approved-bg); color: var(--badge-approved-text); }
-.approver-stage.stage-x { background: var(--badge-denied-bg);   color: var(--badge-denied-text); }
-.approver-when { color: var(--text-muted); font-size: 0.75rem; white-space: nowrap; }
-
-/* SCRUM-302: Stufen-Hinweis in der Prüf-Übersicht */
-.pending-stage { margin-top: 3px; font-size: 0.75rem; font-weight: 600; }
-.pending-stage.stage-1 { color: var(--badge-partial-text); }
-.pending-stage.stage-2 { color: var(--badge-approved-text); }
 .badge-denied   { background: var(--badge-denied-bg);   color: var(--badge-denied-text); }
+.badge-first_approved { background: #dbeafe; color: #1e40af; }
+
+.stage-pill { margin-left: 0.5rem; font-size: 0.7rem; vertical-align: middle; }
+.approval-line { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.15rem; }
+.approval-line--denied { color: var(--badge-denied-text); }
 
 .btn-withdraw { background: var(--badge-denied-bg); color: var(--badge-denied-text); border: none; }
 .btn-withdraw:hover { background: color-mix(in srgb, var(--badge-denied-text) 18%, var(--badge-denied-bg)); }
@@ -2516,3 +2496,87 @@ body.modal-open { overflow: hidden; }
 
 [data-color-mode="deuteranopia"] .color-mode-dot { background: #38bdf8; }
 [data-color-mode="protanopia"]   .color-mode-dot { background: #7dd3fc; }
+
+/* ── Schichtplan (SCRUM-346/349) ────────────────────── */
+
+.card-title { margin: 0 0 0.85rem; font-size: 1rem; }
+
+.shift-plan-controls {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+.shift-plan-controls .form-group { margin-bottom: 0; }
+
+.shift-list { display: flex; flex-direction: column; gap: 0.75rem; }
+
+.shift-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.85rem 1rem;
+    background: var(--surface);
+}
+.shift-card--warn { border-color: var(--badge-denied-text); }
+
+.shift-card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+.shift-when { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.shift-group {
+    font-size: 0.75rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.1rem 0.55rem;
+}
+.shift-staff { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; }
+.shift-del { margin-left: auto; }
+
+.shift-warnings { margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.shift-warning {
+    font-size: 0.8rem;
+    color: var(--badge-denied-text);
+    background: var(--badge-denied-bg);
+    border-radius: var(--radius);
+    padding: 0.15rem 0.5rem;
+}
+
+.shift-assignees { margin-top: 0.6rem; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.shift-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    background: var(--badge-approved-bg);
+    color: var(--badge-approved-text);
+    border-radius: 999px;
+    padding: 0.15rem 0.3rem 0.15rem 0.65rem;
+}
+.shift-chip--warn { background: var(--badge-pending-bg); color: var(--badge-pending-text); }
+.shift-chip-x {
+    border: none;
+    background: rgba(0, 0, 0, 0.12);
+    color: inherit;
+    border-radius: 999px;
+    width: 1.15rem;
+    height: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.shift-chip-x:hover { background: rgba(0, 0, 0, 0.25); }
+
+.shift-assign-row { margin-top: 0.7rem; display: flex; gap: 0.5rem; }
+.shift-assign-row select { flex: 1; min-width: 0; }
+
+.shift-card-actions { margin-top: 0.6rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.offer-swap-hint { font-size: 0.8rem; margin-top: 0.5rem; }
+
+@media (max-width: 768px) {
+    .shift-plan-controls { flex-direction: column; align-items: stretch; }
+    .shift-del { margin-left: 0; }
+}
